@@ -16,7 +16,7 @@ Harrier is a CLI tool for collecting, analyzing, and modifying HTTP Archive (HAR
 - [x] Auth pattern detection (Basic, Bearer, JWT, OAuth, API Keys, Cookies)
 
 ### 🚧 Phase 2: Core Analysis Features (Current)
-- [ ] Implement `analyze` command - display HAR statistics and metadata
+- [x] Implement `analyze` command - display HAR statistics and metadata
 - [ ] Implement `stats` command - performance metrics and timing breakdown
 - [ ] Implement `filter` command - filter by domain, status, method, content-type
 - [ ] Implement `security` command - auth and sensitive data scanning
