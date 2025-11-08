@@ -1,0 +1,32 @@
+[package]
+name = "harrier-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "CLI for Harrier - HTTP Archive (HAR) file tool"
+
+[[bin]]
+name = "harrier"
+path = "src/main.rs"
+
+[dependencies]
+# Internal
+harrier-core = { workspace = true }
+harrier-detectors = { workspace = true }
+
+# CLI
+clap = { workspace = true }
+console = { workspace = true }
+indicatif = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+# Serialization
+serde_json = { workspace = true }
