@@ -9,10 +9,10 @@ pub struct ProxyServer;
 
 impl ProxyServer {
     pub fn new(_port: u16) -> Self {
-        todo!("Proxy server implementation coming in Phase 5")
+        todo!("Proxy server implementation coming in Phase 4")
     }
 
     pub async fn start(&self) -> Result<()> {
-        todo!("Proxy server implementation coming in Phase 5")
+        todo!("Proxy server implementation coming in Phase 4")
     }
 }
