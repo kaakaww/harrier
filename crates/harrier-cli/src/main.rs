@@ -134,13 +134,21 @@ fn main() -> Result<()> {
             content_type,
             output,
         } => commands::filter::execute(&file, domain, status, method, content_type, output),
-        Commands::Stats { file, detailed } => commands::stats::execute(&file, detailed, &cli.format),
+        Commands::Stats { file, detailed } => {
+            commands::stats::execute(&file, detailed, &cli.format)
+        }
         Commands::Security {
             file,
             check_auth,
             find_sensitive,
             insecure_only,
-        } => commands::security::execute(&file, check_auth, find_sensitive, insecure_only, &cli.format),
+        } => commands::security::execute(
+            &file,
+            check_auth,
+            find_sensitive,
+            insecure_only,
+            &cli.format,
+        ),
         Commands::Discover {
             file,
             endpoints_only,

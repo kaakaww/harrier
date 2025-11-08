@@ -135,11 +135,12 @@ impl AppTypeDetector {
         }
 
         // Check content type
-        if let Some(content_type) = Self::get_content_type(&entry.request.headers) {
-            if content_type.contains("application/json") && entry.request.method == "POST" {
-                // TODO: Check body for query/mutation/subscription
-                return true;
-            }
+        if let Some(content_type) = Self::get_content_type(&entry.request.headers)
+            && content_type.contains("application/json")
+            && entry.request.method == "POST"
+        {
+            // TODO: Check body for query/mutation/subscription
+            return true;
         }
 
         false
@@ -178,11 +179,11 @@ impl AppTypeDetector {
 
     fn is_mcp(entry: &Entry) -> bool {
         // Check for JSON-RPC 2.0 structure in content
-        if let Some(content_type) = Self::get_content_type(&entry.request.headers) {
-            if content_type.contains("application/json") {
-                // TODO: Check body for JSON-RPC structure and MCP methods
-                return false;
-            }
+        if let Some(content_type) = Self::get_content_type(&entry.request.headers)
+            && content_type.contains("application/json")
+        {
+            // TODO: Check body for JSON-RPC structure and MCP methods
+            return false;
         }
 
         false

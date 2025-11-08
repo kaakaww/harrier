@@ -1,6 +1,6 @@
 use super::{Analyzer, SummaryStats};
-use crate::har::Har;
 use crate::Result;
+use crate::har::Har;
 use std::collections::HashSet;
 use url::Url;
 
@@ -24,10 +24,10 @@ impl Analyzer for SummaryAnalyzer {
         // Extract unique domains
         let mut domains = HashSet::new();
         for entry in entries {
-            if let Ok(url) = Url::parse(&entry.request.url) {
-                if let Some(domain) = url.domain() {
-                    domains.insert(domain.to_string());
-                }
+            if let Ok(url) = Url::parse(&entry.request.url)
+                && let Some(domain) = url.domain()
+            {
+                domains.insert(domain.to_string());
             }
         }
 
@@ -49,7 +49,11 @@ impl Analyzer for SummaryAnalyzer {
             http_versions.insert(entry.request.http_version.clone());
         }
 
-        tracing::info!("Summary analysis complete: {} entries, {} domains", total_entries, domains.len());
+        tracing::info!(
+            "Summary analysis complete: {} entries, {} domains",
+            total_entries,
+            domains.len()
+        );
 
         Ok(SummaryStats {
             total_entries,

@@ -1,5 +1,5 @@
-use crate::{Error, Result};
 use super::types::Har;
+use crate::{Error, Result};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
@@ -24,7 +24,7 @@ impl HarReader {
     }
 
     /// Parse a HAR file from a JSON string
-    pub fn from_str(content: &str) -> Result<Har> {
+    pub fn parse(content: &str) -> Result<Har> {
         tracing::debug!("Parsing HAR from string");
 
         let har: Har = serde_json::from_str(content)?;
@@ -86,7 +86,7 @@ mod tests {
             }
         }"#;
 
-        let har = HarReader::from_str(har_json).unwrap();
+        let har = HarReader::parse(har_json).unwrap();
         assert_eq!(har.log.version, "1.2");
         assert_eq!(har.log.entries.len(), 0);
     }
@@ -101,7 +101,7 @@ mod tests {
             }
         }"#;
 
-        let har = HarReader::from_str(har_json).unwrap();
+        let har = HarReader::parse(har_json).unwrap();
         let result = HarReader::validate(&har);
         assert!(result.is_err());
     }

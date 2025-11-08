@@ -1,5 +1,5 @@
-use crate::Result;
 use super::types::Har;
+use crate::Result;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
@@ -50,7 +50,7 @@ impl HarWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::har::{Log, Creator};
+    use crate::har::{Creator, Log};
 
     #[test]
     fn test_har_to_string() {

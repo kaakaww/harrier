@@ -1,6 +1,6 @@
 use super::{Analyzer, PerformanceStats, SlowRequest};
-use crate::har::Har;
 use crate::Result;
+use crate::har::Har;
 
 pub struct PerformanceAnalyzer {
     top_n: usize,
@@ -42,7 +42,7 @@ impl Analyzer for PerformanceAnalyzer {
         // Calculate median time
         let mut times: Vec<f64> = entries.iter().map(|e| e.time).collect();
         times.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let median_time = if times.len() % 2 == 0 {
+        let median_time = if times.len().is_multiple_of(2) {
             let mid = times.len() / 2;
             (times[mid - 1] + times[mid]) / 2.0
         } else {

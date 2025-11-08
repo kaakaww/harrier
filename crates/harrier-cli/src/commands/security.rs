@@ -8,7 +8,10 @@ pub fn execute(
     insecure_only: bool,
     format: &str,
 ) -> Result<()> {
-    tracing::info!("Performing security analysis on HAR file: {}", file.display());
+    tracing::info!(
+        "Performing security analysis on HAR file: {}",
+        file.display()
+    );
 
     // TODO: Implement security command
     println!("Security command - Coming soon!");
