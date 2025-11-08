@@ -1,0 +1,10 @@
+[package]
+name = "harrier"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "A CLI tool for collecting, analyzing, and modifying HTTP Archive (HAR) files"
+repository = "https://github.com/azconger/harrier"
+authors = ["StackHawk"]
+
+[dependencies]
