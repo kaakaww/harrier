@@ -1,0 +1,31 @@
+[package]
+name = "harrier-browser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Chrome DevTools Protocol integration for HAR capture"
+
+[dependencies]
+# Internal
+harrier-core = { workspace = true }
+
+# Async
+tokio = { workspace = true }
+futures = { workspace = true }
+
+# Browser automation
+chromiumoxide = { workspace = true }
+
+# JSON
+serde_json = { workspace = true }
+
+# Utilities
+chrono = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }

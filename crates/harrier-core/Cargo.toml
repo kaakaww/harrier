@@ -1,0 +1,25 @@
+[package]
+name = "harrier-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Core library for HAR file processing"
+
+[dependencies]
+# JSON
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+regex = { workspace = true }
+url = { workspace = true }
+mime = { workspace = true }
+chrono = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
