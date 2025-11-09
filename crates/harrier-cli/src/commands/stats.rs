@@ -1,7 +1,7 @@
 use anyhow::Result;
 use harrier_core::analysis::{AnalysisReport, Analyzer, PerformanceAnalyzer, SummaryAnalyzer};
 use harrier_core::har::{Entry, Har, HarReader};
-use harrier_detectors::{AppType, AppTypeDetector};
+use harrier_detectors::{AppType, AppTypeDetector, AuthAnalysis, AuthAnalyzer};
 use std::collections::HashMap;
 use std::path::Path;
 use url::Url;
@@ -65,20 +65,17 @@ fn get_root_domain(domain: &str) -> String {
 /// then all other hosts by hit count descending
 pub fn analyze_hosts(har: &Har) -> Vec<HostStats> {
     // Group entries by host
-    let mut host_entries: HashMap<String, (String, String, u16, Vec<&Entry>, bool)> = HashMap::new();
+    let mut host_entries: HashMap<String, (String, String, u16, Vec<&Entry>, bool)> =
+        HashMap::new();
     let mut first_host_key: Option<String> = None;
 
     for entry in &har.log.entries {
         if let Ok(url) = Url::parse(&entry.request.url) {
             let protocol = url.scheme().to_string();
             let domain = url.host_str().unwrap_or("unknown").to_string();
-            let port = url.port().unwrap_or_else(|| {
-                if protocol == "https" {
-                    443
-                } else {
-                    80
-                }
-            });
+            let port = url
+                .port()
+                .unwrap_or_else(|| if protocol == "https" { 443 } else { 80 });
 
             let key = format!("{}://{}:{}", protocol, domain, port);
 
@@ -168,7 +165,14 @@ pub fn analyze_hosts(har: &Har) -> Vec<HostStats> {
     hosts.into_iter().map(|(stats, _, _)| stats).collect()
 }
 
-pub fn execute(file: &Path, timings: bool, show_hosts: bool, format: &str) -> Result<()> {
+pub fn execute(
+    file: &Path,
+    timings: bool,
+    show_hosts: bool,
+    show_auth: bool,
+    verbose: bool,
+    format: &str,
+) -> Result<()> {
     tracing::info!("Analyzing HAR file: {}", file.display());
 
     // Read HAR file
@@ -184,11 +188,18 @@ pub fn execute(file: &Path, timings: bool, show_hosts: bool, format: &str) -> Re
         None
     };
 
+    // Optionally analyze authentication
+    let auth = if show_auth {
+        Some(AuthAnalyzer::analyze(&har)?)
+    } else {
+        None
+    };
+
     // Output results based on format
     match format {
-        "json" => output_json(&report, hosts.as_deref())?,
-        "table" => output_table(&report, hosts.as_deref(), timings)?,
-        _ => output_pretty(&report, hosts.as_deref(), timings)?, // "pretty" is default
+        "json" => output_json(&report, hosts.as_deref(), auth.as_ref())?,
+        "table" => output_table(&report, hosts.as_deref(), auth.as_ref(), timings)?,
+        _ => output_pretty(&report, hosts.as_deref(), auth.as_ref(), timings, verbose)?, // "pretty" is default
     }
 
     Ok(())
@@ -197,9 +208,12 @@ pub fn execute(file: &Path, timings: bool, show_hosts: bool, format: &str) -> Re
 fn output_pretty(
     report: &AnalysisReport,
     hosts: Option<&[HostStats]>,
+    auth: Option<&AuthAnalysis>,
     include_timings: bool,
+    verbose: bool,
 ) -> Result<()> {
     use console::style;
+    use harrier_detectors::AuthSummaryGenerator;
 
     println!("\n{}", style("HAR Analysis Report").bold().cyan());
     println!("{}", style("===================").cyan());
@@ -229,7 +243,8 @@ fn output_pretty(
 
             // Format API types
             let api_types_str = if !host.api_types.is_empty() {
-                let types: Vec<String> = host.api_types
+                let types: Vec<String> = host
+                    .api_types
                     .iter()
                     .map(|t| t.api_type.as_str().to_string())
                     .collect();
@@ -276,22 +291,285 @@ fn output_pretty(
         }
     }
 
+    // Authentication section (if requested)
+    if let Some(auth_analysis) = auth {
+        // Generate authentication summary
+        let auth_summary = AuthSummaryGenerator::generate_summary(auth_analysis);
+        let security_summary = AuthSummaryGenerator::aggregate_security_findings(auth_analysis);
+
+        if let Some(summary) = auth_summary {
+            // Authentication Summary Section (NEW - Top Priority)
+            println!(
+                "\n{}",
+                style("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━").cyan()
+            );
+            println!("{}", style("Authentication Summary").bold().cyan());
+            println!(
+                "{}",
+                style("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━").cyan()
+            );
+
+            println!("\n{}", style("Primary Method:").bold());
+            println!(
+                "  {}",
+                style(&summary.primary_method.method_type).green().bold()
+            );
+            println!("  {}", summary.primary_method.description);
+
+            println!("\n{}", style("Session Mechanism:").bold());
+            println!("  {}", summary.session_mechanism.mechanism_type);
+            println!("  {}", summary.session_mechanism.details);
+
+            // Key Endpoints
+            if !summary.key_endpoints.is_empty() {
+                println!("\n{}", style("Key Endpoints:").bold());
+                for endpoint in summary.key_endpoints.iter().take(5) {
+                    println!("  {} {}", style(&endpoint.method).yellow(), endpoint.path);
+                    println!("      → {}", style(&endpoint.purpose).dim());
+                }
+                if summary.key_endpoints.len() > 5 {
+                    println!(
+                        "  ... and {} more endpoints",
+                        summary.key_endpoints.len() - 5
+                    );
+                }
+            }
+
+            // HawkScan Configuration
+            println!("\n{}", style("For HawkScan Configuration:").bold().green());
+            println!("{}", style("─────────────────────────────").green());
+            for note in &summary.hawkscan_config.notes {
+                println!("  • {}", note);
+            }
+            println!("\n{}", style("Example stackhawk.yml:").dim());
+            for line in summary.hawkscan_config.config_snippet.lines() {
+                println!("  {}", style(line).dim());
+            }
+
+            // Additional Info
+            if !summary.additional_info.is_empty() {
+                println!("\n{}", style("Additional Information:").bold());
+                for info in &summary.additional_info {
+                    println!("  ℹ {}", info);
+                }
+            }
+
+            println!(
+                "\n{}",
+                style("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━").cyan()
+            );
+        } else {
+            // No authentication detected
+            println!(
+                "\n{}",
+                style("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━").yellow()
+            );
+            println!("{}", style("Authentication Summary").bold().yellow());
+            println!(
+                "{}",
+                style("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━").yellow()
+            );
+            println!(
+                "\n{}",
+                style("⚠ No authentication mechanisms detected in this HAR file.").yellow()
+            );
+            println!("\n{}", style("Possible reasons:").bold());
+            println!("  1. HAR was captured before authentication");
+            println!("  2. Application uses authentication not yet supported");
+            println!("  3. Cookies/headers were sanitized from the HAR file");
+            println!("\n{}", style("To improve detection:").bold());
+            println!("  • Ensure HAR includes a complete authentication flow");
+            println!("  • Capture from login page through authenticated requests");
+            println!("  • Verify cookies and authorization headers are included");
+            println!("\n{}", style("For HawkScan:").bold().green());
+            println!("  • You'll need to configure authentication manually");
+            println!("  • See: https://docs.stackhawk.com/hawkscan/authenticated-scanning.html");
+            println!(
+                "\n{}",
+                style("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━").yellow()
+            );
+        }
+
+        // Security Findings Summary (Aggregated and Deduplicated)
+        let total_critical = security_summary.critical.len();
+        let total_warnings = security_summary.warnings.len();
+        let total_info = security_summary.info.len();
+
+        if total_critical + total_warnings + total_info > 0 {
+            println!("\n{}", style("Security Findings Summary").bold());
+            println!("{}", style("──────────────────────────").dim());
+
+            if total_critical > 0 {
+                println!(
+                    "\n{} {}",
+                    style(format!("⚠ {} Critical", total_critical)).red().bold(),
+                    style("issues found:").red()
+                );
+                for finding in &security_summary.critical {
+                    println!(
+                        "  {} ({} occurrence{})",
+                        finding.message,
+                        finding.count,
+                        if finding.count > 1 { "s" } else { "" }
+                    );
+                    if verbose && !finding.sample_entries.is_empty() {
+                        println!(
+                            "      Sample entries: {}",
+                            finding
+                                .sample_entries
+                                .iter()
+                                .map(|e| format!("#{}", e))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
+                    }
+                }
+            }
+
+            if total_warnings > 0 {
+                println!(
+                    "\n{} {}",
+                    style(format!("⚠ {} Warning", total_warnings))
+                        .yellow()
+                        .bold(),
+                    style("issues found:").yellow()
+                );
+                let max_warnings = if verbose { total_warnings } else { 5 };
+                for finding in security_summary.warnings.iter().take(max_warnings) {
+                    println!(
+                        "  {} ({} occurrence{})",
+                        finding.message,
+                        finding.count,
+                        if finding.count > 1 { "s" } else { "" }
+                    );
+                }
+                if !verbose && total_warnings > 5 {
+                    println!(
+                        "  ... and {} more warnings (use --verbose to see all)",
+                        total_warnings - 5
+                    );
+                }
+            }
+
+            if verbose && total_info > 0 {
+                println!(
+                    "\n{} {}",
+                    style(format!("ℹ {} Info", total_info)).blue(),
+                    style("findings:").blue()
+                );
+                for finding in &security_summary.info {
+                    println!(
+                        "  {} ({} occurrence{})",
+                        finding.message,
+                        finding.count,
+                        if finding.count > 1 { "s" } else { "" }
+                    );
+                }
+            }
+        }
+
+        // Verbose Details (Only if --verbose flag is set)
+        if verbose {
+            // Show detailed session information
+            if !auth_analysis.sessions.is_empty() {
+                println!("\n{}", style("Detailed Session Information").bold());
+                println!("{}", style("─────────────────────────────").dim());
+                for (i, session) in auth_analysis.sessions.iter().enumerate() {
+                    println!("\n{}. {}", i + 1, session.identifier);
+                    println!("   First seen:  {}", session.first_seen);
+                    println!("   Last seen:   {}", session.last_seen);
+                    println!("   Requests:    {}", session.request_count);
+                    println!("   Duration:    {:.1}s", session.duration_ms / 1000.0);
+
+                    if let Some(ref attrs) = session.attributes {
+                        let mut security_flags = Vec::new();
+                        if attrs.http_only == Some(true) {
+                            security_flags.push("HttpOnly ✓");
+                        } else {
+                            security_flags.push("HttpOnly ✗");
+                        }
+                        if attrs.secure == Some(true) {
+                            security_flags.push("Secure ✓");
+                        } else {
+                            security_flags.push("Secure ✗");
+                        }
+                        println!("   Security:    {}", security_flags.join(", "));
+                    }
+                }
+            }
+
+            // Show JWT details
+            if !auth_analysis.jwt_tokens.is_empty() {
+                println!("\n{}", style("JWT Token Details").bold());
+                println!("{}", style("──────────────────").dim());
+                for (i, token) in auth_analysis.jwt_tokens.iter().enumerate() {
+                    println!("\n{}. {}", i + 1, token.raw_token);
+                    if let Some(ref alg) = token.header.alg {
+                        println!("   Algorithm:  {}", alg);
+                    }
+                    if let Some(ref iss) = token.claims.iss {
+                        println!("   Issuer:     {}", iss);
+                    }
+                    if let Some(ref sub) = token.claims.sub {
+                        println!("   Subject:    {}", sub);
+                    }
+                    if let Some(exp) = token.claims.exp {
+                        println!("   Expires:    {} (Unix timestamp)", exp);
+                    }
+                    println!("   Usage:      {} requests", token.usage_count);
+                }
+            }
+
+            // Show authentication events
+            if !auth_analysis.events.is_empty() {
+                println!("\n{}", style("Authentication Events").bold());
+                println!("{}", style("──────────────────────").dim());
+                for event in auth_analysis.events.iter().take(10) {
+                    let icon = match event.event_type {
+                        harrier_detectors::AuthEventType::LoginSuccess => style("✓").green(),
+                        harrier_detectors::AuthEventType::LoginFailure => style("✗").red(),
+                        harrier_detectors::AuthEventType::Logout => style("→").blue(),
+                        harrier_detectors::AuthEventType::TokenRefresh => style("↻").cyan(),
+                        harrier_detectors::AuthEventType::SessionExpired => style("⌛").yellow(),
+                        harrier_detectors::AuthEventType::PasswordReset => style("⚡").magenta(),
+                    };
+                    println!(
+                        "  {} {} - {}",
+                        icon,
+                        event.event_type.as_str(),
+                        event.details.description
+                    );
+                }
+                if auth_analysis.events.len() > 10 {
+                    println!("  ... and {} more events", auth_analysis.events.len() - 10);
+                }
+            }
+        }
+    }
+
     println!(); // trailing newline
     Ok(())
 }
 
-fn output_json(report: &AnalysisReport, hosts: Option<&[HostStats]>) -> Result<()> {
+fn output_json(
+    report: &AnalysisReport,
+    hosts: Option<&[HostStats]>,
+    auth: Option<&AuthAnalysis>,
+) -> Result<()> {
     use serde_json::json;
 
-    let output = if let Some(host_list) = hosts {
-        json!({
-            "summary": report.summary,
-            "performance": report.performance,
-            "hosts": host_list,
-        })
-    } else {
-        json!(report)
-    };
+    let mut output = json!({
+        "summary": report.summary,
+        "performance": report.performance,
+    });
+
+    if let Some(host_list) = hosts {
+        output["hosts"] = json!(host_list);
+    }
+
+    if let Some(auth_analysis) = auth {
+        output["authentication"] = json!(auth_analysis);
+    }
 
     let json_str = serde_json::to_string_pretty(&output)?;
     println!("{}", json_str);
@@ -301,6 +579,7 @@ fn output_json(report: &AnalysisReport, hosts: Option<&[HostStats]>) -> Result<(
 fn output_table(
     report: &AnalysisReport,
     hosts: Option<&[HostStats]>,
+    auth: Option<&AuthAnalysis>,
     include_timings: bool,
 ) -> Result<()> {
     // Simple table format
@@ -315,7 +594,8 @@ fn output_table(
         for host in host_list {
             // Format API types for CSV (quote if contains comma)
             let api_types_str = if !host.api_types.is_empty() {
-                let types: Vec<String> = host.api_types
+                let types: Vec<String> = host
+                    .api_types
                     .iter()
                     .map(|t| t.api_type.as_str().to_string())
                     .collect();
@@ -343,6 +623,53 @@ fn output_table(
         println!("Total Time (ms),{:.2}", report.performance.total_time);
         println!("Average Time (ms),{:.2}", report.performance.average_time);
         println!("Median Time (ms),{:.2}", report.performance.median_time);
+    }
+
+    if let Some(auth_analysis) = auth {
+        println!();
+        println!("Authentication Methods");
+        for method in &auth_analysis.methods {
+            println!("{},", method.as_str());
+        }
+
+        if !auth_analysis.flows.is_empty() {
+            println!();
+            println!("Flow Type,Started,Steps");
+            for flow in &auth_analysis.flows {
+                println!(
+                    "\"{}\",{},{}",
+                    flow.flow_type.as_str(),
+                    flow.start_time,
+                    flow.steps.len()
+                );
+            }
+        }
+
+        if !auth_analysis.events.is_empty() {
+            println!();
+            println!("Event Type,Timestamp,Description");
+            for event in &auth_analysis.events {
+                println!(
+                    "\"{}\",{},\"{}\"",
+                    event.event_type.as_str(),
+                    event.timestamp,
+                    event.details.description
+                );
+            }
+        }
+
+        if !auth_analysis.sessions.is_empty() {
+            println!();
+            println!("Session,Requests,Duration (s)");
+            for session in &auth_analysis.sessions {
+                println!(
+                    "\"{}\",{},{:.1}",
+                    session.identifier,
+                    session.request_count,
+                    session.duration_ms / 1000.0
+                );
+            }
+        }
     }
 
     Ok(())

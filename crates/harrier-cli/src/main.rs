@@ -40,6 +40,14 @@ enum Commands {
         /// Show all hosts with request counts
         #[arg(long)]
         hosts: bool,
+
+        /// Show authentication analysis
+        #[arg(long)]
+        auth: bool,
+
+        /// Show verbose output (includes all details)
+        #[arg(short, long)]
+        verbose: bool,
     },
 
     /// Filter HAR entries by various criteria
@@ -120,7 +128,9 @@ fn main() -> Result<()> {
             file,
             timings,
             hosts,
-        } => commands::stats::execute(&file, timings, hosts, &cli.format),
+            auth,
+            verbose,
+        } => commands::stats::execute(&file, timings, hosts, auth, verbose, &cli.format),
         Commands::Filter {
             file,
             domain,

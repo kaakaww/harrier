@@ -124,8 +124,8 @@ fn test_analyze_extracts_hosts() {
         .join("fixtures")
         .join("sample.har");
 
-    let har = harrier_core::har::HarReader::from_file(&fixture_path)
-        .expect("Failed to read HAR file");
+    let har =
+        harrier_core::har::HarReader::from_file(&fixture_path).expect("Failed to read HAR file");
 
     // Act - analyze hosts
     let hosts = harrier_cli::commands::stats::analyze_hosts(&har);
@@ -274,8 +274,8 @@ fn test_analyze_hosts_with_api_types() {
         .join("fixtures")
         .join("sample.har");
 
-    let har = harrier_core::har::HarReader::from_file(&fixture_path)
-        .expect("Failed to read HAR file");
+    let har =
+        harrier_core::har::HarReader::from_file(&fixture_path).expect("Failed to read HAR file");
 
     // Act - analyze hosts (now includes API type detection)
     let hosts = harrier_cli::commands::stats::analyze_hosts(&har);
@@ -284,7 +284,10 @@ fn test_analyze_hosts_with_api_types() {
     assert_eq!(hosts.len(), 2, "Should find 2 unique hosts");
 
     // Check first host (api.example.com) has API type info
-    assert!(!hosts[0].api_types.is_empty(), "First host should have API types detected");
+    assert!(
+        !hosts[0].api_types.is_empty(),
+        "First host should have API types detected"
+    );
 
     // Verify API types have proper structure
     for host in &hosts {

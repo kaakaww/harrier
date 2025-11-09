@@ -346,26 +346,25 @@ impl AppTypeDetector {
 
     fn is_jsonrpc(entry: &Entry) -> bool {
         // Check for JSON-RPC content type
-        if let Some(content_type) = Self::get_content_type(&entry.request.headers) {
-            if content_type.contains("application/json-rpc") {
-                return true;
-            }
+        if let Some(content_type) = Self::get_content_type(&entry.request.headers)
+            && content_type.contains("application/json-rpc")
+        {
+            return true;
         }
 
         // Check request body for JSON-RPC 2.0 structure
-        if let Some(ref post_data) = entry.request.post_data {
-            if let Some(ref text) = post_data.text {
-                // Look for JSON-RPC 2.0 signature
-                return text.contains("\"jsonrpc\":\"2.0\"")
-                    || text.contains("\"jsonrpc\": \"2.0\"")
-                    || text.contains("'jsonrpc':'2.0'");
-            }
+        if let Some(ref post_data) = entry.request.post_data
+            && let Some(ref text) = post_data.text
+        {
+            // Look for JSON-RPC 2.0 signature
+            return text.contains("\"jsonrpc\":\"2.0\"")
+                || text.contains("\"jsonrpc\": \"2.0\"")
+                || text.contains("'jsonrpc':'2.0'");
         }
 
         // Check response body for JSON-RPC structure
         if let Some(ref text) = entry.response.content.text {
-            return text.contains("\"jsonrpc\":\"2.0\"")
-                || text.contains("\"jsonrpc\": \"2.0\"");
+            return text.contains("\"jsonrpc\":\"2.0\"") || text.contains("\"jsonrpc\": \"2.0\"");
         }
 
         false
@@ -373,24 +372,23 @@ impl AppTypeDetector {
 
     fn is_xmlrpc(entry: &Entry) -> bool {
         // Check for XML-RPC content type
-        if let Some(content_type) = Self::get_content_type(&entry.request.headers) {
-            if content_type.contains("text/xml") || content_type.contains("application/xml") {
-                // Check request body for methodCall
-                if let Some(ref post_data) = entry.request.post_data {
-                    if let Some(ref text) = post_data.text {
-                        return text.contains("<methodCall>") || text.contains("<methodResponse>");
-                    }
-                }
+        if let Some(content_type) = Self::get_content_type(&entry.request.headers)
+            && (content_type.contains("text/xml") || content_type.contains("application/xml"))
+        {
+            // Check request body for methodCall
+            if let Some(ref post_data) = entry.request.post_data
+                && let Some(ref text) = post_data.text
+            {
+                return text.contains("<methodCall>") || text.contains("<methodResponse>");
             }
         }
 
         // Check response content type and body
-        if let Some(content_type) = Self::get_content_type(&entry.response.headers) {
-            if content_type.contains("text/xml") || content_type.contains("application/xml") {
-                if let Some(ref text) = entry.response.content.text {
-                    return text.contains("<methodResponse>") || text.contains("<methodCall>");
-                }
-            }
+        if let Some(content_type) = Self::get_content_type(&entry.response.headers)
+            && (content_type.contains("text/xml") || content_type.contains("application/xml"))
+            && let Some(ref text) = entry.response.content.text
+        {
+            return text.contains("<methodResponse>") || text.contains("<methodCall>");
         }
 
         false
@@ -406,16 +404,15 @@ impl AppTypeDetector {
 
     fn is_socketio(entry: &Entry) -> bool {
         // Check URL for Socket.IO patterns
-        if entry.request.url.contains("/socket.io/")
-            || entry.request.url.contains("socket.io")
-        {
+        if entry.request.url.contains("/socket.io/") || entry.request.url.contains("socket.io") {
             return true;
         }
 
         // Check for Socket.IO transport query parameters
         if entry.request.url.contains("transport=polling")
             || entry.request.url.contains("transport=websocket")
-            || entry.request.url.contains("EIO=") // Engine.IO version
+            || entry.request.url.contains("EIO=")
+        // Engine.IO version
         {
             return true;
         }
@@ -425,16 +422,12 @@ impl AppTypeDetector {
 
     fn is_sockjs(entry: &Entry) -> bool {
         // Check URL for SockJS patterns
-        if entry.request.url.contains("/sockjs/")
-            || entry.request.url.contains("/sockjs-node/")
-        {
+        if entry.request.url.contains("/sockjs/") || entry.request.url.contains("/sockjs-node/") {
             return true;
         }
 
         // Check for SockJS endpoints (server/session/transport pattern)
-        if entry.request.url.contains("/info?")
-            && entry.request.url.matches('/').count() >= 3
-        {
+        if entry.request.url.contains("/info?") && entry.request.url.matches('/').count() >= 3 {
             return true;
         }
 
@@ -469,19 +462,21 @@ impl AppTypeDetector {
         }
 
         // Check response content type for JSON
-        if let Some(content_type) = Self::get_content_type(&entry.response.headers) {
-            if content_type.contains("application/json") {
-                return true;
-            }
+        if let Some(content_type) = Self::get_content_type(&entry.response.headers)
+            && content_type.contains("application/json")
+        {
+            return true;
         }
 
         // Check request content type for JSON (for POST/PUT/PATCH)
-        if ["POST", "PUT", "PATCH"].contains(&method) {
-            if let Some(ref post_data) = entry.request.post_data {
-                if post_data.mime_type.to_lowercase().contains("application/json") {
-                    return true;
-                }
-            }
+        if ["POST", "PUT", "PATCH"].contains(&method)
+            && let Some(ref post_data) = entry.request.post_data
+            && post_data
+                .mime_type
+                .to_lowercase()
+                .contains("application/json")
+        {
+            return true;
         }
 
         false
@@ -496,23 +491,22 @@ impl AppTypeDetector {
         }
 
         // Check response content type for XML (but not SOAP)
-        if let Some(content_type) = Self::get_content_type(&entry.response.headers) {
-            if (content_type.contains("application/xml") || content_type.contains("text/xml"))
-                && !content_type.contains("soap")
-            {
-                return true;
-            }
+        if let Some(content_type) = Self::get_content_type(&entry.response.headers)
+            && (content_type.contains("application/xml") || content_type.contains("text/xml"))
+            && !content_type.contains("soap")
+        {
+            return true;
         }
 
         // Check request content type for XML (for POST/PUT/PATCH)
-        if ["POST", "PUT", "PATCH"].contains(&method) {
-            if let Some(ref post_data) = entry.request.post_data {
-                let mime = post_data.mime_type.to_lowercase();
-                if (mime.contains("application/xml") || mime.contains("text/xml"))
-                    && !mime.contains("soap")
-                {
-                    return true;
-                }
+        if ["POST", "PUT", "PATCH"].contains(&method)
+            && let Some(ref post_data) = entry.request.post_data
+        {
+            let mime = post_data.mime_type.to_lowercase();
+            if (mime.contains("application/xml") || mime.contains("text/xml"))
+                && !mime.contains("soap")
+            {
+                return true;
             }
         }
 
@@ -762,7 +756,7 @@ mod tests {
 
     #[test]
     fn test_detect_for_host_multiple_types() {
-        let entries = vec![
+        let entries = [
             create_test_entry(
                 "https://api.example.com/users",
                 "GET",
@@ -793,14 +787,17 @@ mod tests {
         let results = AppTypeDetector::detect_for_host(&entry_refs);
 
         // Should detect both REST/JSON and GraphQL
-        assert!(results.len() >= 1);
+        assert!(!results.is_empty());
         let detected_types: Vec<AppType> = results.iter().map(|(t, _, _)| t.clone()).collect();
-        assert!(detected_types.contains(&AppType::RestJson) || detected_types.contains(&AppType::GraphQL));
+        assert!(
+            detected_types.contains(&AppType::RestJson)
+                || detected_types.contains(&AppType::GraphQL)
+        );
     }
 
     #[test]
     fn test_detect_for_host_confidence_scoring() {
-        let entries = vec![
+        let entries = [
             create_test_entry(
                 "https://api.example.com/users",
                 "GET",
