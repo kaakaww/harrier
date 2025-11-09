@@ -1,6 +1,7 @@
 use anyhow::Result;
 use harrier_core::analysis::{AnalysisReport, Analyzer, PerformanceAnalyzer, SummaryAnalyzer};
-use harrier_core::har::{Har, HarReader};
+use harrier_core::har::{Entry, Har, HarReader};
+use harrier_detectors::{AppType, AppTypeDetector};
 use std::collections::HashMap;
 use std::path::Path;
 use url::Url;
@@ -30,6 +31,14 @@ pub fn analyze_har(file: &Path, include_timings: bool) -> Result<AnalysisReport>
     })
 }
 
+/// API type information for a host
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ApiTypeInfo {
+    pub api_type: AppType,
+    pub confidence: f64,
+    pub request_count: usize,
+}
+
 /// Statistics for a single host
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct HostStats {
@@ -37,12 +46,26 @@ pub struct HostStats {
     pub domain: String,
     pub port: u16,
     pub hit_count: usize,
+    pub api_types: Vec<ApiTypeInfo>,
+}
+
+/// Extract root domain from a domain string
+/// Examples: api.example.com -> example.com, www.example.com -> example.com
+fn get_root_domain(domain: &str) -> String {
+    let parts: Vec<&str> = domain.split('.').collect();
+    if parts.len() >= 2 {
+        format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1])
+    } else {
+        domain.to_string()
+    }
 }
 
 /// Analyze hosts from HAR file entries
-/// Returns hosts with first request's host first, then sorted by hit count descending
+/// Returns hosts with first request's host first, followed by same root domain hosts by hit count,
+/// then all other hosts by hit count descending
 pub fn analyze_hosts(har: &Har) -> Vec<HostStats> {
-    let mut host_map: HashMap<String, (HostStats, bool)> = HashMap::new();
+    // Group entries by host
+    let mut host_entries: HashMap<String, (String, String, u16, Vec<&Entry>, bool)> = HashMap::new();
     let mut first_host_key: Option<String> = None;
 
     for entry in &har.log.entries {
@@ -66,35 +89,83 @@ pub fn analyze_hosts(har: &Har) -> Vec<HostStats> {
 
             let is_first = first_host_key.as_ref() == Some(&key);
 
-            host_map
+            host_entries
                 .entry(key)
-                .and_modify(|(stats, _)| stats.hit_count += 1)
-                .or_insert((
-                    HostStats {
-                        protocol: protocol.clone(),
-                        domain: domain.clone(),
-                        port,
-                        hit_count: 1,
-                    },
-                    is_first,
-                ));
+                .and_modify(|(_, _, _, entries, _)| entries.push(entry))
+                .or_insert((protocol, domain, port, vec![entry], is_first));
         }
     }
 
-    // Convert to vector and sort
-    let mut hosts: Vec<_> = host_map.into_values().collect();
+    // Get the first host's domain for grouping
+    let first_host_domain = if let Some(first_key) = &first_host_key {
+        host_entries
+            .get(first_key)
+            .map(|(_, domain, _, _, _)| get_root_domain(domain))
+    } else {
+        None
+    };
 
-    // Sort: first host first, then by hit count descending
-    hosts.sort_by(|(a, a_is_first), (b, b_is_first)| {
+    // Convert to HostStats with API type detection
+    let mut hosts: Vec<(HostStats, bool, String)> = host_entries
+        .into_iter()
+        .map(|(_, (protocol, domain, port, entries, is_first))| {
+            let hit_count = entries.len();
+            let root_domain = get_root_domain(&domain);
+
+            // Detect API types for this host
+            let api_type_results = AppTypeDetector::detect_for_host(&entries);
+            let api_types = api_type_results
+                .into_iter()
+                .map(|(api_type, confidence, request_count)| ApiTypeInfo {
+                    api_type,
+                    confidence,
+                    request_count,
+                })
+                .collect();
+
+            (
+                HostStats {
+                    protocol,
+                    domain,
+                    port,
+                    hit_count,
+                    api_types,
+                },
+                is_first,
+                root_domain,
+            )
+        })
+        .collect();
+
+    // Sort with three-tier logic:
+    // 1. First host (always first)
+    // 2. Hosts with same root domain as first, sorted by hit count descending
+    // 3. All other hosts, sorted by hit count descending
+    hosts.sort_by(|(a, a_is_first, a_root), (b, b_is_first, b_root)| {
         match (a_is_first, b_is_first) {
             (true, false) => std::cmp::Ordering::Less,
             (false, true) => std::cmp::Ordering::Greater,
-            _ => b.hit_count.cmp(&a.hit_count),
+            _ => {
+                // Neither is first, group by root domain
+                if let Some(ref first_root) = first_host_domain {
+                    let a_same_domain = a_root == first_root;
+                    let b_same_domain = b_root == first_root;
+
+                    match (a_same_domain, b_same_domain) {
+                        (true, false) => std::cmp::Ordering::Less,
+                        (false, true) => std::cmp::Ordering::Greater,
+                        _ => b.hit_count.cmp(&a.hit_count),
+                    }
+                } else {
+                    // No first host, just sort by hit count
+                    b.hit_count.cmp(&a.hit_count)
+                }
+            }
         }
     });
 
     // Extract just the HostStats
-    hosts.into_iter().map(|(stats, _)| stats).collect()
+    hosts.into_iter().map(|(stats, _, _)| stats).collect()
 }
 
 pub fn execute(file: &Path, timings: bool, show_hosts: bool, format: &str) -> Result<()> {
@@ -155,9 +226,21 @@ fn output_pretty(
         println!("\n{}", style("Hosts:").bold());
         for (i, host) in host_list.iter().enumerate() {
             let first_marker = if i == 0 { " [first]" } else { "" };
+
+            // Format API types
+            let api_types_str = if !host.api_types.is_empty() {
+                let types: Vec<String> = host.api_types
+                    .iter()
+                    .map(|t| t.api_type.as_str().to_string())
+                    .collect();
+                format!(" [{}]", types.join(", "))
+            } else {
+                String::new()
+            };
+
             println!(
-                "  {}://{}:{}  ({} requests){}",
-                host.protocol, host.domain, host.port, host.hit_count, first_marker
+                "  {}://{}:{}  ({} requests){}{}",
+                host.protocol, host.domain, host.port, host.hit_count, api_types_str, first_marker
             );
         }
     }
@@ -228,11 +311,28 @@ fn output_table(
 
     if let Some(host_list) = hosts {
         println!();
-        println!("Host,Requests");
+        println!("Host,Requests,API Types");
         for host in host_list {
+            // Format API types for CSV (quote if contains comma)
+            let api_types_str = if !host.api_types.is_empty() {
+                let types: Vec<String> = host.api_types
+                    .iter()
+                    .map(|t| t.api_type.as_str().to_string())
+                    .collect();
+                let types_joined = types.join(", ");
+                // Quote if contains comma
+                if types_joined.contains(',') {
+                    format!("\"{}\"", types_joined)
+                } else {
+                    types_joined
+                }
+            } else {
+                String::new()
+            };
+
             println!(
-                "{}://{}:{},{}",
-                host.protocol, host.domain, host.port, host.hit_count
+                "{}://{}:{},{},{}",
+                host.protocol, host.domain, host.port, host.hit_count, api_types_str
             );
         }
     }
