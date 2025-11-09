@@ -27,8 +27,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Analyze a HAR file and display statistics
-    Analyze {
+    /// Display HAR file statistics
+    Stats {
         /// Path to the HAR file
         #[arg(value_name = "FILE")]
         file: PathBuf,
@@ -36,6 +36,10 @@ enum Commands {
         /// Include detailed timing information
         #[arg(long)]
         timings: bool,
+
+        /// Show all hosts with request counts
+        #[arg(long)]
+        hosts: bool,
     },
 
     /// Filter HAR entries by various criteria
@@ -63,17 +67,6 @@ enum Commands {
         /// Output filtered HAR to file
         #[arg(short, long)]
         output: Option<PathBuf>,
-    },
-
-    /// Extract statistics and performance metrics
-    Stats {
-        /// Path to the HAR file
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
-
-        /// Show detailed timing breakdown
-        #[arg(long)]
-        detailed: bool,
     },
 
     /// Perform security analysis
@@ -123,9 +116,11 @@ fn main() -> Result<()> {
 
     // Execute the command
     match cli.command {
-        Commands::Analyze { file, timings } => {
-            commands::analyze::execute(&file, timings, &cli.format)
-        }
+        Commands::Stats {
+            file,
+            timings,
+            hosts,
+        } => commands::stats::execute(&file, timings, hosts, &cli.format),
         Commands::Filter {
             file,
             domain,
@@ -134,9 +129,6 @@ fn main() -> Result<()> {
             content_type,
             output,
         } => commands::filter::execute(&file, domain, status, method, content_type, output),
-        Commands::Stats { file, detailed } => {
-            commands::stats::execute(&file, detailed, &cli.format)
-        }
         Commands::Security {
             file,
             check_auth,

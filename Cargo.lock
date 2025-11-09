@@ -1217,9 +1217,11 @@ dependencies = [
  "harrier-core",
  "harrier-detectors",
  "indicatif",
+ "serde",
  "serde_json",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

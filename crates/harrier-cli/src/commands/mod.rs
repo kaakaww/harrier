@@ -1,4 +1,3 @@
-pub mod analyze;
 pub mod discover;
 pub mod filter;
 pub mod security;
