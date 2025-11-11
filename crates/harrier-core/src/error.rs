@@ -16,6 +16,9 @@ pub enum Error {
 
     #[error("Analysis error: {0}")]
     Analysis(String),
+
+    #[error("Invalid pattern: {0}")]
+    InvalidPattern(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

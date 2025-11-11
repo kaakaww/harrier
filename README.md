@@ -1,27 +1,17 @@
 # Harrier
 
-A command-line tool for collecting, analyzing, and modifying HTTP Archive (HAR) files.
+A command-line tool for analyzing, filtering, and working with HTTP Archive (HAR) files.
 
 ## Overview
 
-Harrier is designed to make working with HAR files easier, especially in the context of security testing with [StackHawk](https://www.stackhawk.com/) and HawkScan. HAR files capture HTTP traffic data and are useful for debugging, analysis, and testing.
+Harrier makes working with HAR files easier, especially for security testing with [StackHawk](https://www.stackhawk.com/) and HawkScan. It provides fast analysis, flexible filtering, and security insights for HTTP traffic captured in HAR format.
 
-## Project Goals
+## Features
 
-Harrier aims to provide a comprehensive toolkit for HAR file operations:
-
-- **Collect** - Generate HAR files from various sources
-- **Analyze** - Parse, inspect, and extract insights from HAR files
-- **Modify** - Transform, filter, and sanitize HAR file contents
-- **Integrate** - Work seamlessly with automation and testing workflows
-
-## Initial Features (Planned)
-
-- Parse and validate HAR files
-- Extract specific requests/responses
-- Filter by URL patterns, hostnames, or content types
-- Sanitize sensitive data (tokens, credentials, PII)
-- Generate summary statistics and metadata
+- **Stats** - Analyze HAR files with traffic statistics, performance metrics, and host analysis
+- **Filter** - Extract specific traffic by host, status code, method, or content type
+- **Security** - Detect authentication patterns and scan for sensitive data
+- **Discover** - Identify API types (REST, GraphQL, gRPC, WebSocket, etc.) and endpoints
 
 ## Installation
 
@@ -35,18 +25,81 @@ cargo run -- [command] [args]
 
 ## Usage
 
+### Stats Command
+
+Analyze HAR file contents and generate traffic statistics:
+
 ```bash
-# Validate a HAR file
-harrier validate file.har
+# Basic statistics
+harrier stats traffic.har
 
-# Extract specific URLs
-harrier filter file.har --url-pattern "*/api/*"
+# With detailed timing information
+harrier stats traffic.har --timings
 
-# Sanitize sensitive data
-harrier sanitize file.har --output clean.har
+# Show all hosts with request counts
+harrier stats traffic.har --hosts
 
-# View summary statistics
-harrier stats file.har
+# Show authentication analysis
+harrier stats traffic.har --auth
+
+# All details
+harrier stats traffic.har --verbose
+```
+
+### Filter Command
+
+Extract specific traffic from HAR files:
+
+```bash
+# Filter to a single host
+harrier filter traffic.har --hosts api.example.com -o filtered.har
+
+# Filter with glob patterns
+harrier filter traffic.har --hosts "*.example.com" -o filtered.har
+
+# Multiple hosts (repeatable or comma-separated)
+harrier filter traffic.har --hosts api.com --hosts cdn.com -o filtered.har
+harrier filter traffic.har --hosts "api.com,cdn.com" -o filtered.har
+
+# Filter by status codes
+harrier filter traffic.har --status 2xx -o success.har
+harrier filter traffic.har --status 404 -o notfound.har
+
+# Combined filters (AND logic)
+harrier filter traffic.har --hosts api.com --status 2xx --method POST
+
+# Output to stdout for piping
+harrier filter traffic.har --hosts api.com | jq '.log.entries | length'
+```
+
+### Security Command
+
+Analyze authentication and security patterns:
+
+```bash
+# Full security analysis
+harrier security traffic.har
+
+# Check authentication patterns only
+harrier security traffic.har --check-auth
+
+# Scan for sensitive data
+harrier security traffic.har --find-sensitive
+
+# Show only insecure requests
+harrier security traffic.har --insecure-only
+```
+
+### Discover Command
+
+Identify API types and discover endpoints:
+
+```bash
+# Discover all APIs and app types
+harrier discover traffic.har
+
+# Show only API endpoints
+harrier discover traffic.har --endpoints-only
 ```
 
 ## Development

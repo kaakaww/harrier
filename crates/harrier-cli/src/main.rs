@@ -8,9 +8,8 @@ mod commands;
 #[command(name = "harrier")]
 #[command(author, version, about, long_about = None)]
 #[command(
-    about = "A CLI tool for collecting, analyzing, and modifying HTTP Archive (HAR) files",
-    long_about = "Harrier helps you work with HAR files by providing tools to analyze traffic, \
-                  detect security patterns, discover APIs, and capture new HAR files via proxy or browser."
+    about = "CLI tool for working with HTTP Archive (HAR) files",
+    long_about = "Harrier analyzes, filters, and modifies HAR files for security testing and API discovery."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -20,7 +19,7 @@ struct Cli {
     #[arg(short, long, global = true)]
     verbose: bool,
 
-    /// Output format (json, table, pretty)
+    /// Output format
     #[arg(short, long, global = true, default_value = "pretty")]
     format: String,
 }
@@ -29,11 +28,11 @@ struct Cli {
 enum Commands {
     /// Display HAR file statistics
     Stats {
-        /// Path to the HAR file
+        /// HAR file to analyze
         #[arg(value_name = "FILE")]
         file: PathBuf,
 
-        /// Include detailed timing information
+        /// Show detailed timing info
         #[arg(long)]
         timings: bool,
 
@@ -45,45 +44,45 @@ enum Commands {
         #[arg(long)]
         auth: bool,
 
-        /// Show verbose output (includes all details)
+        /// Show all details
         #[arg(short, long)]
         verbose: bool,
     },
 
-    /// Filter HAR entries by various criteria
+    /// Filter HAR entries by criteria
     Filter {
-        /// Path to the HAR file
+        /// HAR file to filter
         #[arg(value_name = "FILE")]
         file: PathBuf,
 
-        /// Filter by domain pattern
+        /// Host patterns (exact or glob like *.example.com)
         #[arg(long)]
-        domain: Option<String>,
+        hosts: Vec<String>,
 
-        /// Filter by HTTP status code (supports ranges like 2xx, 404, etc.)
+        /// Status codes (2xx, 404, 500-599, etc.)
         #[arg(long)]
         status: Option<String>,
 
-        /// Filter by HTTP method (GET, POST, etc.)
+        /// HTTP method (GET, POST, etc.)
         #[arg(long)]
         method: Option<String>,
 
-        /// Filter by content type pattern
+        /// Content type pattern
         #[arg(long)]
         content_type: Option<String>,
 
-        /// Output filtered HAR to file
+        /// Output file (defaults to stdout)
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
 
     /// Perform security analysis
     Security {
-        /// Path to the HAR file
+        /// HAR file to analyze
         #[arg(value_name = "FILE")]
         file: PathBuf,
 
-        /// Check for authentication patterns
+        /// Check authentication patterns
         #[arg(long)]
         check_auth: bool,
 
@@ -91,26 +90,26 @@ enum Commands {
         #[arg(long)]
         find_sensitive: bool,
 
-        /// Only show insecure requests
+        /// Show only insecure requests
         #[arg(long)]
         insecure_only: bool,
     },
 
-    /// Discover APIs and detect application types
+    /// Discover APIs and app types
     Discover {
-        /// Path to the HAR file
+        /// HAR file to analyze
         #[arg(value_name = "FILE")]
         file: PathBuf,
 
-        /// Only show API endpoints
+        /// Show only API endpoints
         #[arg(long)]
         endpoints_only: bool,
 
-        /// Generate OpenAPI spec (if possible)
+        /// Generate OpenAPI spec
         #[arg(long)]
         openapi: bool,
 
-        /// Output file for OpenAPI spec
+        /// Output file for spec
         #[arg(short, long, requires = "openapi")]
         output: Option<PathBuf>,
     },
@@ -133,12 +132,12 @@ fn main() -> Result<()> {
         } => commands::stats::execute(&file, timings, hosts, auth, verbose, &cli.format),
         Commands::Filter {
             file,
-            domain,
+            hosts,
             status,
             method,
             content_type,
             output,
-        } => commands::filter::execute(&file, domain, status, method, content_type, output),
+        } => commands::filter::execute(&file, hosts, status, method, content_type, output),
         Commands::Security {
             file,
             check_auth,
@@ -173,5 +172,6 @@ fn init_logging(verbose: bool) {
         .with_env_filter(filter)
         .with_target(false)
         .without_time()
+        .with_writer(std::io::stderr)
         .init();
 }

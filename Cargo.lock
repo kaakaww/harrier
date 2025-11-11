@@ -1219,6 +1219,7 @@ dependencies = [
  "indicatif",
  "serde",
  "serde_json",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -1229,6 +1230,7 @@ name = "harrier-core"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "glob",
  "mime",
  "regex",
  "serde",
