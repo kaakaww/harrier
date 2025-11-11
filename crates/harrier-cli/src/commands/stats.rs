@@ -49,9 +49,16 @@ pub struct HostStats {
     pub api_types: Vec<ApiTypeInfo>,
 }
 
-/// Extract root domain from a domain string
-/// Examples: api.example.com -> example.com, www.example.com -> example.com
+/// Extract root domain from a domain string using public suffix list
+/// Examples: api.example.com -> example.com, api.co.uk -> api.co.uk
 fn get_root_domain(domain: &str) -> String {
+    // Use the psl crate with built-in public suffix list for proper TLD handling
+    if let Some(parsed_domain) = psl::domain(domain.as_bytes())
+        && let Ok(domain_str) = std::str::from_utf8(parsed_domain.as_bytes()) {
+            return domain_str.to_string();
+        }
+
+    // Fallback: simple two-level domain extraction if PSL parsing fails
     let parts: Vec<&str> = domain.split('.').collect();
     if parts.len() >= 2 {
         format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1])

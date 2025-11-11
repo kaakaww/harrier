@@ -583,14 +583,23 @@ impl FlowDetector {
         }
     }
 
-    fn calculate_duration(_start: &str, end: Option<&str>) -> f64 {
-        // Simplified duration calculation
-        // In a real implementation, parse ISO 8601 timestamps
-        if end.is_some() {
-            1000.0 // Placeholder - would calculate actual difference
-        } else {
-            0.0
+    fn calculate_duration(start: &str, end: Option<&str>) -> f64 {
+        // Parse ISO 8601 timestamps and calculate duration in milliseconds
+        use chrono::{DateTime, Utc};
+
+        let start_dt = match start.parse::<DateTime<Utc>>() {
+            Ok(dt) => dt,
+            Err(_) => return 0.0,
+        };
+
+        if let Some(end_str) = end {
+            if let Ok(end_dt) = end_str.parse::<DateTime<Utc>>() {
+                let duration = end_dt.signed_duration_since(start_dt);
+                return duration.num_milliseconds() as f64;
+            }
         }
+
+        0.0
     }
 }
 
