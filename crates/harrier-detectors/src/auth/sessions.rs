@@ -272,17 +272,12 @@ impl SessionTracker {
         }
     }
 
-    fn parse_timestamp(_timestamp: &str) -> f64 {
-        // Simple timestamp parsing - convert ISO 8601 to milliseconds
-        // For session duration calculation
-        // This is a simplified version - could use chrono for better parsing
-        use std::time::{SystemTime, UNIX_EPOCH};
+    fn parse_timestamp(timestamp: &str) -> f64 {
+        // Parse ISO 8601 timestamp to milliseconds since epoch
+        use chrono::DateTime;
 
-        // Try to parse the timestamp, fall back to current time if parsing fails
-        // In a real implementation, you'd want to use a proper date parsing library
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as f64)
+        DateTime::parse_from_rfc3339(timestamp)
+            .map(|dt| dt.timestamp_millis() as f64)
             .unwrap_or(0.0)
     }
 }
