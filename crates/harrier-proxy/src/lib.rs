@@ -1,7 +1,9 @@
-// Proxy functionality - to be implemented in future phases
+// Proxy functionality for HAR capture
 
+pub mod cert;
 pub mod error;
 
+pub use cert::CertificateAuthority;
 pub use error::{Error, Result};
 
 // Placeholder for proxy server implementation

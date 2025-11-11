@@ -64,6 +64,9 @@ glob = "0.3"
 # Domain parsing
 psl = "2.1"
 
+# System utilities
+dirs = "5.0"
+
 # Testing
 tempfile = "3.8"
 

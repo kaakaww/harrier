@@ -37,3 +37,9 @@ thiserror = { workspace = true }
 
 # Logging
 tracing = { workspace = true }
+
+# System utilities
+dirs = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
