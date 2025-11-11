@@ -3,7 +3,7 @@ use harrier_core::har::{Entry, Har, Header};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AppType {
     Rest,
     RestJson,
