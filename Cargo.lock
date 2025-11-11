@@ -1246,6 +1246,7 @@ name = "harrier-detectors"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "chrono",
  "harrier-core",
  "lazy_static",
  "mime",

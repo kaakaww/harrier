@@ -1,4 +1,5 @@
 use crate::Result;
+use chrono::{DateTime, Utc};
 use harrier_core::har::{Entry, Har};
 use serde::{Deserialize, Serialize};
 
@@ -583,14 +584,25 @@ impl FlowDetector {
         }
     }
 
-    fn calculate_duration(_start: &str, end: Option<&str>) -> f64 {
-        // Simplified duration calculation
-        // In a real implementation, parse ISO 8601 timestamps
-        if end.is_some() {
-            1000.0 // Placeholder - would calculate actual difference
-        } else {
-            0.0
-        }
+    fn calculate_duration(start: &str, end: Option<&str>) -> f64 {
+        let Some(end_str) = end else {
+            return 0.0;
+        };
+
+        // Parse ISO 8601 timestamps
+        let start_time = match DateTime::parse_from_rfc3339(start) {
+            Ok(dt) => dt.with_timezone(&Utc),
+            Err(_) => return 0.0, // Return 0 if parsing fails
+        };
+
+        let end_time = match DateTime::parse_from_rfc3339(end_str) {
+            Ok(dt) => dt.with_timezone(&Utc),
+            Err(_) => return 0.0, // Return 0 if parsing fails
+        };
+
+        // Calculate duration in milliseconds
+        let duration = end_time.signed_duration_since(start_time);
+        duration.num_milliseconds() as f64
     }
 }
 
@@ -614,6 +626,35 @@ mod tests {
 
         entry.request.url = "https://api.example.com/users".to_string();
         assert!(!FlowDetector::is_oauth_authorize_request(&entry));
+    }
+
+    #[test]
+    fn test_calculate_duration() {
+        // Test valid timestamps - 1.5 seconds apart
+        let start = "2024-01-01T00:00:00.000Z";
+        let end = "2024-01-01T00:00:01.500Z";
+        let duration = FlowDetector::calculate_duration(start, Some(end));
+        assert_eq!(duration, 1500.0);
+
+        // Test valid timestamps - 2 seconds apart
+        let start2 = "2024-01-01T12:00:00Z";
+        let end2 = "2024-01-01T12:00:02Z";
+        let duration2 = FlowDetector::calculate_duration(start2, Some(end2));
+        assert_eq!(duration2, 2000.0);
+
+        // Test with no end time
+        let duration3 = FlowDetector::calculate_duration(start, None);
+        assert_eq!(duration3, 0.0);
+
+        // Test with invalid timestamp format
+        let duration4 = FlowDetector::calculate_duration("invalid", Some(end));
+        assert_eq!(duration4, 0.0);
+
+        // Test with timezone offset
+        let start5 = "2024-01-01T00:00:00-05:00";
+        let end5 = "2024-01-01T00:00:03-05:00";
+        let duration5 = FlowDetector::calculate_duration(start5, Some(end5));
+        assert_eq!(duration5, 3000.0);
     }
 
     fn create_test_entry(url: &str) -> Entry {
