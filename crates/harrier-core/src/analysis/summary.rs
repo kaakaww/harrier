@@ -43,10 +43,14 @@ impl Analyzer for SummaryAnalyzer {
             None
         };
 
-        // Extract HTTP versions
+        // Extract HTTP versions and normalize them
         let mut http_versions = HashSet::new();
         for entry in entries {
-            http_versions.insert(entry.request.http_version.clone());
+            let normalized = normalize_http_version(&entry.request.http_version);
+            // Skip empty versions
+            if !normalized.is_empty() {
+                http_versions.insert(normalized);
+            }
         }
 
         tracing::info!(
@@ -62,5 +66,25 @@ impl Analyzer for SummaryAnalyzer {
             date_range,
             http_versions: http_versions.into_iter().collect(),
         })
+    }
+}
+
+/// Normalize HTTP version strings to a consistent format
+fn normalize_http_version(version: &str) -> String {
+    let lower = version.to_lowercase();
+    match lower.as_str() {
+        "h2" | "http/2" | "http/2.0" => "HTTP/2.0".to_string(),
+        "h3" | "http/3" | "http/3.0" => "HTTP/3.0".to_string(),
+        "http/1.0" => "HTTP/1.0".to_string(),
+        "http/1.1" => "HTTP/1.1".to_string(),
+        _ => {
+            // Try to handle uppercase versions like HTTP/1.1, HTTP/2.0
+            if version.starts_with("HTTP/") {
+                version.to_string()
+            } else {
+                // Unknown format, return as-is
+                version.to_string()
+            }
+        }
     }
 }

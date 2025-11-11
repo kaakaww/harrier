@@ -17,6 +17,7 @@ regex = { workspace = true }
 url = { workspace = true }
 mime = { workspace = true }
 chrono = { workspace = true }
+glob = { workspace = true }
 
 # Error handling
 thiserror = { workspace = true }

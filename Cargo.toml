@@ -59,6 +59,10 @@ anyhow = "1.0"
 thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
+glob = "0.3"
+
+# Testing
+tempfile = "3.8"
 
 # Internal crates
 harrier-core = { path = "crates/harrier-core" }

@@ -10,6 +10,9 @@ pub enum Error {
 
     #[error("Invalid data: {0}")]
     InvalidData(String),
+
+    #[error("Parse error: {0}")]
+    Parse(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

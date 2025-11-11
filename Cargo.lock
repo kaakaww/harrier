@@ -1217,9 +1217,12 @@ dependencies = [
  "harrier-core",
  "harrier-detectors",
  "indicatif",
+ "serde",
  "serde_json",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -1227,6 +1230,7 @@ name = "harrier-core"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "glob",
  "mime",
  "regex",
  "serde",
@@ -1240,6 +1244,7 @@ dependencies = [
 name = "harrier-detectors"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "harrier-core",
  "lazy_static",
  "mime",
