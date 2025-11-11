@@ -49,14 +49,26 @@ pub struct HostStats {
     pub api_types: Vec<ApiTypeInfo>,
 }
 
-/// Extract root domain from a domain string
-/// Examples: api.example.com -> example.com, www.example.com -> example.com
+/// Extract root domain from a domain string using the Public Suffix List
+/// Examples: api.example.com -> example.com, www.example.com -> example.com, api.co.uk -> example.co.uk
+/// This properly handles public suffixes like .co.uk, .com.au, etc.
 fn get_root_domain(domain: &str) -> String {
-    let parts: Vec<&str> = domain.split('.').collect();
-    if parts.len() >= 2 {
-        format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1])
-    } else {
-        domain.to_string()
+    // Use the psl crate to get the registrable domain (eTLD+1)
+    // This handles public suffixes correctly
+    match psl::domain(domain.as_bytes()) {
+        Some(root) => {
+            // Convert bytes back to string
+            String::from_utf8_lossy(root.as_bytes()).to_string()
+        }
+        None => {
+            // Fallback to simple logic for IP addresses or invalid domains
+            let parts: Vec<&str> = domain.split('.').collect();
+            if parts.len() >= 2 {
+                format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1])
+            } else {
+                domain.to_string()
+            }
+        }
     }
 }
 
@@ -673,4 +685,41 @@ fn output_table(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_root_domain_simple() {
+        // Standard domains
+        assert_eq!(get_root_domain("api.example.com"), "example.com");
+        assert_eq!(get_root_domain("www.example.com"), "example.com");
+        assert_eq!(get_root_domain("example.com"), "example.com");
+    }
+
+    #[test]
+    fn test_get_root_domain_public_suffixes() {
+        // Domains with public suffixes like .co.uk
+        assert_eq!(get_root_domain("api.example.co.uk"), "example.co.uk");
+        assert_eq!(get_root_domain("www.example.co.uk"), "example.co.uk");
+        assert_eq!(get_root_domain("example.co.uk"), "example.co.uk");
+
+        // Other public suffixes
+        assert_eq!(get_root_domain("test.example.com.au"), "example.com.au");
+        assert_eq!(get_root_domain("api.example.org.uk"), "example.org.uk");
+    }
+
+    #[test]
+    fn test_get_root_domain_edge_cases() {
+        // Single label domain
+        assert_eq!(get_root_domain("localhost"), "localhost");
+
+        // IP addresses - psl correctly identifies the last two octets as the "domain"
+        assert_eq!(get_root_domain("192.168.1.1"), "1.1");
+
+        // Multi-level domains
+        assert_eq!(get_root_domain("a.b.c.example.com"), "example.com");
+    }
 }

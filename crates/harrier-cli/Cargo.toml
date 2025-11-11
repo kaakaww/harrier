@@ -35,5 +35,8 @@ serde_json = { workspace = true }
 # URL parsing
 url = { workspace = true }
 
+# Domain parsing
+psl = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
