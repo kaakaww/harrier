@@ -375,7 +375,7 @@ impl JwtAnalyzer {
 
     fn is_jwt(token: &str) -> bool {
         let parts: Vec<&str> = token.split('.').collect();
-        parts.len() == 3 && parts.iter().all(|p| !p.is_empty() || parts[2].is_empty())
+        parts.len() == 3 && parts[0..2].iter().all(|p| !p.is_empty())
     }
 
     fn truncate_token(token: &str) -> String {
