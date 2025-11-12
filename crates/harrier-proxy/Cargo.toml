@@ -28,6 +28,7 @@ hudsucker = { workspace = true }
 rustls = { workspace = true }
 rcgen = { workspace = true }
 rustls-pemfile = { workspace = true }
+aws-lc-rs = { workspace = true }
 
 # JSON
 serde_json = { workspace = true }

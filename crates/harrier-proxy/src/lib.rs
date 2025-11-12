@@ -2,19 +2,10 @@
 
 pub mod cert;
 pub mod error;
+pub mod handler;
+pub mod server;
 
 pub use cert::CertificateAuthority;
 pub use error::{Error, Result};
-
-// Placeholder for proxy server implementation
-pub struct ProxyServer;
-
-impl ProxyServer {
-    pub fn new(_port: u16) -> Self {
-        todo!("Proxy server implementation coming in Phase 4")
-    }
-
-    pub async fn start(&self) -> Result<()> {
-        todo!("Proxy server implementation coming in Phase 4")
-    }
-}
+pub use handler::{CapturedEntry, HarCaptureHandler};
+pub use server::ProxyServer;

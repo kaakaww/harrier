@@ -17,6 +17,9 @@ harrier-core = { workspace = true }
 harrier-detectors = { workspace = true }
 harrier-proxy = { workspace = true }
 
+# Async
+tokio = { workspace = true }
+
 # CLI
 clap = { workspace = true }
 console = { workspace = true }

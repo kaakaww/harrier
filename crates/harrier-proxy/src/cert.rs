@@ -38,7 +38,8 @@ impl CertificateAuthority {
             .map_err(|e| Error::Tls(format!("Failed to generate key pair: {}", e)))?;
 
         // Generate self-signed certificate
-        let cert = params.self_signed(&key_pair)
+        let cert = params
+            .self_signed(&key_pair)
             .map_err(|e| Error::Tls(format!("Failed to generate CA certificate: {}", e)))?;
 
         let cert_pem = cert.pem();
@@ -53,11 +54,9 @@ impl CertificateAuthority {
     pub fn load_from_pem(cert_path: &Path, key_path: &Path) -> Result<Self> {
         tracing::debug!("Loading CA certificate from {:?}", cert_path);
 
-        let cert_pem = fs::read_to_string(cert_path)
-            .map_err(|e| Error::Io(e))?;
+        let cert_pem = fs::read_to_string(cert_path).map_err(Error::Io)?;
 
-        let key_pem = fs::read_to_string(key_path)
-            .map_err(|e| Error::Io(e))?;
+        let key_pem = fs::read_to_string(key_path).map_err(Error::Io)?;
 
         Ok(Self { cert_pem, key_pem })
     }
