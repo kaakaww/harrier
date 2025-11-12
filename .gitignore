@@ -41,6 +41,7 @@ $RECYCLE.BIN/
 test-output/
 fixtures/*.generated.har
 samples/
+captured.har
 
 # Build artifacts
 *.exe
