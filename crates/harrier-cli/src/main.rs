@@ -113,6 +113,25 @@ enum Commands {
         #[arg(short, long, requires = "openapi")]
         output: Option<PathBuf>,
     },
+
+    /// Start MITM proxy to capture HAR traffic
+    Proxy {
+        /// Port to listen on
+        #[arg(short, long, default_value = "8080")]
+        port: u16,
+
+        /// Output HAR file
+        #[arg(short, long, default_value = "captured.har")]
+        output: PathBuf,
+
+        /// Certificate path (uses ~/.harrier/ca.crt if not specified)
+        #[arg(long)]
+        cert: Option<PathBuf>,
+
+        /// Private key path (uses ~/.harrier/ca.key if not specified)
+        #[arg(long)]
+        key: Option<PathBuf>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -156,6 +175,12 @@ fn main() -> Result<()> {
             openapi,
             output,
         } => commands::discover::execute(&file, endpoints_only, openapi, output, &cli.format),
+        Commands::Proxy {
+            port,
+            output,
+            cert,
+            key,
+        } => commands::proxy::execute(port, &output, cert.as_deref(), key.as_deref()),
     }
 }
 

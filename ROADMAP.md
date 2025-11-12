@@ -15,27 +15,33 @@ Harrier is a CLI tool for collecting, analyzing, and modifying HTTP Archive (HAR
 - [x] App type detection (REST, GraphQL, SOAP, gRPC, WebSocket, MCP, SPA)
 - [x] Auth pattern detection (Basic, Bearer, JWT, OAuth, API Keys, Cookies)
 
-### ✅ Phase 2: Core Analysis Features (Completed)
+### 🟡 Phase 2: Core Analysis Features (Partially Complete)
 - [x] Implement `stats` command - display HAR statistics, performance metrics, and host analysis
 - [x] Implement `filter` command - filter by host (exact/glob), status, method, content-type with AND logic
-- [x] Implement `security` command - auth and sensitive data scanning
-- [x] Implement `discover` command - API endpoint discovery and app type classification
-- [x] Add comprehensive tests with real HAR file fixtures
+- [x] Add comprehensive tests with real HAR file fixtures (65 tests passing)
 - [x] Update README with usage examples
+- [ ] Implement `security` command - **DEFERRED** (detectors exist, CLI stub only)
+- [ ] Implement `discover` command - **DEFERRED** (detectors exist, CLI stub only)
 
-### 📋 Phase 3: Advanced Analysis (Planned)
+**Decision:** Security and discover commands are deferred to prioritize Phase 4 (HAR collection via proxy), which is more critical for HawkScan workflows. The detection infrastructure in `harrier-detectors` is complete and can be wired to CLI commands post-Phase 4 MVP.
+
+### 📋 Phase 3: Advanced Analysis (Deferred)
 - [ ] Sensitive data detection (PII, credentials, tokens)
 - [ ] API schema inference
 - [ ] OpenAPI spec generation from HAR files
 - [ ] Performance bottleneck identification
 - [ ] Security issue reporting with severity levels
 
-### 📋 Phase 4: HAR Collection via Proxy (Planned)
-- [ ] HTTP/HTTPS MITM proxy implementation
-- [ ] TLS certificate generation and management
-- [ ] Real-time HAR generation from intercepted traffic
-- [ ] Traffic filtering and selective capture
+**Note:** Phase 3 deferred in favor of Phase 4 priority. Will revisit after proxy MVP.
+
+### 🚧 Phase 4: HAR Collection via Proxy (Current - MVP In Progress)
+- [ ] HTTP/HTTPS MITM proxy implementation using `hudsucker`
+- [ ] TLS certificate generation and management with `rcgen`
+- [ ] HAR capture from intercepted traffic (buffer-and-write approach for MVP)
 - [ ] Proxy configuration and setup documentation
+- [ ] CA certificate installation guide (macOS/Linux/Windows)
+
+**MVP Scope:** Basic HTTP/HTTPS proxy that captures all traffic to HAR file on shutdown. Live filtering and real-time analysis deferred to post-MVP iterations.
 
 ### 📋 Phase 5: Browser Integration (Planned)
 - [ ] Chrome launcher with DevTools Protocol
@@ -54,12 +60,22 @@ Harrier is a CLI tool for collecting, analyzing, and modifying HTTP Archive (HAR
 
 ## Current Focus
 
-**Phase 2 Complete:** All core analysis commands are implemented and tested. Harrier now provides comprehensive HAR file analysis, flexible filtering, security scanning, and API discovery capabilities.
+**Phase 4 MVP - HAR Collection via Proxy**
 
-**Next:** Phase 3 will focus on advanced analysis features like OpenAPI spec generation and performance bottleneck identification.
+Building basic HTTP/HTTPS MITM proxy to capture traffic for HawkScan workflows. This is prioritized over completing Phase 2 (security/discover commands) and Phase 3 (advanced analysis) because:
+
+1. **Primary use case:** Proxy collection is more critical than additional analysis features
+2. **Current capabilities sufficient:** Existing `stats` and `filter` commands meet immediate analysis needs
+3. **Foundation ready:** All dependencies (hudsucker, rustls, rcgen) already integrated
+
+**MVP Goal:** Intercept HTTP/HTTPS traffic, generate valid HAR file on shutdown, enable post-processing with existing filter command.
+
+**Post-MVP:** Wire security/discover commands (infrastructure exists), add live filtering, streaming HAR writer.
 
 ## Notes
 
-- Phases 4 and 5 are lower priority - validate Phase 2-3 features with users first
-- Focus on StackHawk customer use cases: security testing, API discovery, authentication analysis
+- **Priority shift:** Phase 4 (proxy) prioritized over Phase 2 completion and Phase 3 based on HawkScan workflow needs
+- **Technical debt accepted:** Security and discover commands deferred with plan to backfill post-proxy MVP
+- **Phase 5** (browser integration) remains future work, likely after Phase 4 MVP stabilizes
+- Focus on StackHawk customer use cases: traffic capture, security testing, API discovery
 - Keep CLI fast and composable with other Unix tools
