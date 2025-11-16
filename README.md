@@ -10,8 +10,9 @@ Harrier makes working with HAR files easier, especially for security testing wit
 
 - **Stats** - Analyze HAR files with traffic statistics, performance metrics, and host analysis
 - **Filter** - Extract specific traffic by host, status code, method, or content type
-- **Security** - Detect authentication patterns and scan for sensitive data
-- **Discover** - Identify API types (REST, GraphQL, gRPC, WebSocket, etc.) and endpoints
+- **Proxy** - Capture HTTP/HTTPS traffic in real-time with MITM proxy
+- **Security** _(Coming Soon)_ - Detect authentication patterns and scan for sensitive data
+- **Discover** _(Coming Soon)_ - Identify API types (REST, GraphQL, gRPC, WebSocket, etc.) and endpoints
 
 ## Installation
 
@@ -72,35 +73,59 @@ harrier filter traffic.har --hosts api.com --status 2xx --method POST
 harrier filter traffic.har --hosts api.com | jq '.log.entries | length'
 ```
 
-### Security Command
+### Proxy Command
 
-Analyze authentication and security patterns:
+Capture HTTP/HTTPS traffic in real-time using a Man-in-the-Middle (MITM) proxy:
 
 ```bash
-# Full security analysis
-harrier security traffic.har
+# Start proxy on default port 8080
+harrier proxy
 
-# Check authentication patterns only
-harrier security traffic.har --check-auth
+# Specify custom port and output file
+harrier proxy --port 3128 --output my-traffic.har
 
-# Scan for sensitive data
-harrier security traffic.har --find-sensitive
-
-# Show only insecure requests
-harrier security traffic.har --insecure-only
+# Use custom CA certificate
+harrier proxy --cert /path/to/ca.crt --key /path/to/ca.key
 ```
+
+**How it works:**
+
+1. Start the proxy with `harrier proxy`
+2. The first time you run it, a CA certificate will be generated at `~/.harrier/ca.crt`
+3. **Install the CA certificate** in your system's trust store (see [Proxy Setup Guide](docs/proxy-setup.md))
+4. Configure your browser or application to use the proxy (e.g., `localhost:8080`)
+5. Browse normally - all HTTP/HTTPS traffic will be captured
+6. Press `Ctrl+C` to stop the proxy and write the HAR file
+
+**Important:** You must install the CA certificate for HTTPS interception to work. Without it, browsers will show certificate errors. See the [Proxy Setup Guide](docs/proxy-setup.md) for detailed installation instructions for macOS, Linux, and Windows.
+
+**Post-capture analysis:**
+
+```bash
+# View captured traffic statistics
+harrier stats captured.har
+
+# Filter to specific hosts
+harrier filter captured.har --hosts api.example.com -o filtered.har
+```
+
+## Coming Soon
+
+The following features are planned but not yet implemented:
+
+### Security Command
+Analyze authentication and security patterns:
+- Detect authentication methods (Basic, Bearer, JWT, OAuth, API Keys, Cookies)
+- Scan for sensitive data exposure
+- Identify insecure requests (HTTP, weak auth, etc.)
 
 ### Discover Command
-
 Identify API types and discover endpoints:
+- Detect API types (REST, GraphQL, gRPC, WebSocket, SOAP, etc.)
+- Extract and list all endpoints
+- Generate OpenAPI specifications from traffic
 
-```bash
-# Discover all APIs and app types
-harrier discover traffic.har
-
-# Show only API endpoints
-harrier discover traffic.har --endpoints-only
-```
+_Backend infrastructure for these features exists in the `harrier-detectors` crate and will be wired to CLI commands in a future release._
 
 ## Development
 

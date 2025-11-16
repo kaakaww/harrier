@@ -34,14 +34,20 @@ Harrier is a CLI tool for collecting, analyzing, and modifying HTTP Archive (HAR
 
 **Note:** Phase 3 deferred in favor of Phase 4 priority. Will revisit after proxy MVP.
 
-### 🚧 Phase 4: HAR Collection via Proxy (Current - MVP In Progress)
-- [ ] HTTP/HTTPS MITM proxy implementation using `hudsucker`
-- [ ] TLS certificate generation and management with `rcgen`
-- [ ] HAR capture from intercepted traffic (buffer-and-write approach for MVP)
-- [ ] Proxy configuration and setup documentation
-- [ ] CA certificate installation guide (macOS/Linux/Windows)
+### ✅ Phase 4: HAR Collection via Proxy (Completed)
+- [x] HTTP/HTTPS MITM proxy implementation using `hudsucker`
+- [x] TLS certificate generation and management with `rcgen`
+- [x] HAR capture from intercepted traffic (buffer-and-write approach for MVP)
+- [x] Proxy configuration and setup documentation
+- [x] CA certificate installation guide (macOS/Linux/Windows)
 
-**MVP Scope:** Basic HTTP/HTTPS proxy that captures all traffic to HAR file on shutdown. Live filtering and real-time analysis deferred to post-MVP iterations.
+**Status:** MVP complete! Basic HTTP/HTTPS proxy captures all traffic to HAR file on shutdown. Users can configure browsers to use the proxy, and comprehensive setup documentation is available in [docs/proxy-setup.md](docs/proxy-setup.md).
+
+**Post-MVP Enhancements (Future):**
+- Live filtering during capture
+- Real-time analysis/streaming
+- HAR file rotation for long-running captures
+- Web UI for traffic inspection
 
 ### 📋 Phase 5: Browser Integration (Planned)
 - [ ] Chrome launcher with DevTools Protocol
@@ -60,17 +66,20 @@ Harrier is a CLI tool for collecting, analyzing, and modifying HTTP Archive (HAR
 
 ## Current Focus
 
-**Phase 4 MVP - HAR Collection via Proxy**
+**Phase 4 Complete - Next Steps**
 
-Building basic HTTP/HTTPS MITM proxy to capture traffic for HawkScan workflows. This is prioritized over completing Phase 2 (security/discover commands) and Phase 3 (advanced analysis) because:
+With the proxy MVP complete, the next priorities are:
 
-1. **Primary use case:** Proxy collection is more critical than additional analysis features
-2. **Current capabilities sufficient:** Existing `stats` and `filter` commands meet immediate analysis needs
-3. **Foundation ready:** All dependencies (hudsucker, rustls, rcgen) already integrated
+1. **Wire existing detectors to CLI** - The `harrier-detectors` crate has comprehensive auth and app-type detection that needs CLI integration
+2. **Complete Phase 2** - Finish `security` and `discover` commands (backend infrastructure exists, just needs CLI wiring)
+3. **Phase 5 consideration** - Evaluate browser integration vs. further proxy enhancements
 
-**MVP Goal:** Intercept HTTP/HTTPS traffic, generate valid HAR file on shutdown, enable post-processing with existing filter command.
-
-**Post-MVP:** Wire security/discover commands (infrastructure exists), add live filtering, streaming HAR writer.
+**Completed in Phase 4:**
+- ✅ Full HTTP/HTTPS MITM proxy with TLS interception
+- ✅ Automatic CA certificate generation and management
+- ✅ HAR capture on proxy shutdown
+- ✅ Comprehensive setup documentation with platform-specific instructions
+- ✅ Integration with existing `filter` and `stats` commands for post-processing
 
 ## Notes
 
