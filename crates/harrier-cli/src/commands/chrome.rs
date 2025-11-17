@@ -85,16 +85,20 @@ pub fn execute(
                 io::stdin().read_line(&mut input)?;
 
                 if input.trim().eq_ignore_ascii_case("y") {
-                    println!("🛑 Closing Chrome...");
+                    println!("⏳ Waiting for Chrome to close...");
                     // Chrome process was moved into spawn_blocking, can't kill here
                     // For MVP, just proceed with saving
-                    println!("   Please close Chrome manually to complete capture");
+                    println!("   Please close all Chrome windows to complete capture");
                 } else {
                     println!("❌ Capture cancelled");
                     return Ok(());
                 }
             }
         }
+
+        // Note: After user confirms with "y", we continue to wait for Chrome to exit
+        // and capture_handle to complete. The spawn_blocking task will finish when
+        // Chrome is manually closed by the user.
 
         // Step 7: Get captured traffic
         let network_capture = capture_handle.await
