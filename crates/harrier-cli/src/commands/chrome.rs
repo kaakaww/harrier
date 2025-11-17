@@ -29,9 +29,11 @@ pub fn execute(
     profile: Option<String>,
 ) -> Result<()> {
     // Create tokio runtime for async operations
-    let runtime = tokio::runtime::Runtime::new()?;
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
 
-    runtime.block_on(async {
+    let result = runtime.block_on(async {
         // Step 1: Find Chrome binary
         println!("🔍 Locating Chrome...");
         let finder = ChromeFinder::new(chrome_path);
@@ -219,7 +221,12 @@ pub fn execute(
         }
 
         Ok(())
-    })
+    });
+
+    // Explicitly shutdown runtime with timeout to prevent hanging on blocking tasks
+    runtime.shutdown_timeout(std::time::Duration::from_millis(100));
+
+    result
 }
 
 /// Apply host filtering to HAR file
