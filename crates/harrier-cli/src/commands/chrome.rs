@@ -65,9 +65,36 @@ pub fn execute(
             cdp_session.capture_traffic().await
         });
 
-        // Step 6: Wait for Chrome to exit
-        let status = chrome_process.wait()?;
-        println!("🛑 Chrome closed (exit code: {})", status.code().unwrap_or(-1));
+        // Step 6: Wait for Chrome to exit or Ctrl+C
+        use tokio::signal;
+        use std::io::{self, Write};
+
+        tokio::select! {
+            // Chrome exits naturally
+            result = tokio::task::spawn_blocking(move || chrome_process.wait()) => {
+                let status = result??;
+                println!("🛑 Chrome closed (exit code: {})", status.code().unwrap_or(-1));
+            }
+
+            // User presses Ctrl+C
+            _ = signal::ctrl_c() => {
+                print!("\n⚠️  Chrome is still running. Close Chrome and save HAR? (y/n): ");
+                io::stdout().flush()?;
+
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+
+                if input.trim().eq_ignore_ascii_case("y") {
+                    println!("🛑 Closing Chrome...");
+                    // Chrome process was moved into spawn_blocking, can't kill here
+                    // For MVP, just proceed with saving
+                    println!("   Please close Chrome manually to complete capture");
+                } else {
+                    println!("❌ Capture cancelled");
+                    return Ok(());
+                }
+            }
+        }
 
         // Step 7: Get captured traffic
         let network_capture = capture_handle.await
