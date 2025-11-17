@@ -134,8 +134,9 @@ mod tests {
             "https://example.com".to_string(),
         );
 
+        // Just verify duration() doesn't panic and returns a value
         let duration = req.duration();
-        assert!(duration.as_millis() >= 0);
+        assert!(duration.as_millis() < 1000); // Should be under 1 second for this test
     }
 
     #[test]
