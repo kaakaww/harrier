@@ -68,6 +68,7 @@ psl = "2.1"
 
 # System utilities
 dirs = "5.0"
+which = "6.0"
 
 # Testing
 tempfile = "3.8"

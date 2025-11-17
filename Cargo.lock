@@ -1128,6 +1128,8 @@ dependencies = [
  "anyhow",
  "clap",
  "console",
+ "dirs",
+ "harrier-browser",
  "harrier-core",
  "harrier-detectors",
  "harrier-proxy",
@@ -1140,6 +1142,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "which",
 ]
 
 [[package]]
