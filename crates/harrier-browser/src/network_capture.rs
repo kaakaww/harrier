@@ -1,6 +1,11 @@
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
+use harrier_core::har::{
+    Cache, Content, Creator, Entry, Har, Header, Log, PostData,
+    Request, Response, Timings,
+};
+
 /// Represents a captured network request with optional response
 #[derive(Debug, Clone)]
 pub struct NetworkRequest {
@@ -114,6 +119,137 @@ impl NetworkCapture {
     pub fn count(&self) -> usize {
         self.requests.len()
     }
+
+    /// Convert captured network events to HAR format
+    pub fn to_har(&self) -> Har {
+        let entries: Vec<Entry> = self
+            .requests
+            .values()
+            .map(|net_req| self.network_request_to_entry(net_req))
+            .collect();
+
+        Har {
+            log: Log {
+                version: "1.2".to_string(),
+                creator: Creator {
+                    name: "Harrier".to_string(),
+                    version: env!("CARGO_PKG_VERSION").to_string(),
+                    comment: None,
+                },
+                browser: None,
+                pages: None,
+                entries,
+                comment: None,
+            },
+        }
+    }
+
+    /// Convert a NetworkRequest to a HAR Entry
+    fn network_request_to_entry(&self, net_req: &NetworkRequest) -> Entry {
+        let duration = net_req.duration();
+
+        Entry {
+            page_ref: None,
+            started_date_time: format!("{:?}", net_req.started_at),
+            time: duration.as_millis() as f64,
+            request: Request {
+                method: net_req.method.clone(),
+                url: net_req.url.clone(),
+                http_version: "HTTP/1.1".to_string(),
+                headers: self.convert_headers(&net_req.request_headers),
+                query_string: vec![],
+                cookies: vec![],
+                headers_size: -1,
+                body_size: net_req
+                    .post_data
+                    .as_ref()
+                    .map(|s| s.len() as i64)
+                    .unwrap_or(-1),
+                post_data: net_req.post_data.as_ref().map(|text| PostData {
+                    mime_type: "application/json".to_string(),
+                    text: Some(text.clone()),
+                    params: None,
+                    comment: None,
+                }),
+                comment: None,
+            },
+            response: net_req
+                .response
+                .as_ref()
+                .map(|resp| Response {
+                    status: resp.status as i64,
+                    status_text: resp.status_text.clone(),
+                    http_version: "HTTP/1.1".to_string(),
+                    headers: self.convert_headers(&resp.headers),
+                    cookies: vec![],
+                    content: Content {
+                        size: net_req.encoded_data_length,
+                        compression: None,
+                        mime_type: resp
+                            .headers
+                            .get("content-type")
+                            .cloned()
+                            .unwrap_or_else(|| "application/octet-stream".to_string()),
+                        text: None,
+                        encoding: None,
+                        comment: None,
+                    },
+                    redirect_url: String::new(),
+                    headers_size: -1,
+                    body_size: net_req.encoded_data_length,
+                    comment: None,
+                })
+                .unwrap_or_else(|| Response {
+                    status: 0,
+                    status_text: "No Response".to_string(),
+                    http_version: "HTTP/1.1".to_string(),
+                    headers: vec![],
+                    cookies: vec![],
+                    content: Content {
+                        size: 0,
+                        compression: None,
+                        mime_type: "application/octet-stream".to_string(),
+                        text: None,
+                        encoding: None,
+                        comment: None,
+                    },
+                    redirect_url: String::new(),
+                    headers_size: -1,
+                    body_size: 0,
+                    comment: None,
+                }),
+            cache: Cache {
+                before_request: None,
+                after_request: None,
+                comment: None,
+            },
+            timings: Timings {
+                blocked: None,
+                dns: None,
+                connect: None,
+                send: 0.0,
+                wait: duration.as_millis() as f64,
+                receive: 0.0,
+                ssl: None,
+                comment: None,
+            },
+            server_ip_address: None,
+            connection: None,
+            comment: None,
+        }
+    }
+
+    /// Convert HashMap headers to HAR Header format
+    fn convert_headers(&self, headers: &HashMap<String, String>) -> Vec<Header> {
+        headers
+            .iter()
+            .map(|(name, value)| Header {
+                name: name.clone(),
+                value: value.clone(),
+                comment: None,
+            })
+            .collect()
+    }
 }
 
 impl Default for NetworkCapture {
@@ -173,5 +309,63 @@ mod tests {
 
         assert!(req.response.is_some());
         assert_eq!(req.response.as_ref().unwrap().status, 200);
+    }
+
+    #[test]
+    fn test_convert_to_har_empty() {
+        let capture = NetworkCapture::new();
+        let har = capture.to_har();
+
+        assert_eq!(har.log.version, "1.2");
+        assert_eq!(har.log.creator.name, "Harrier");
+        assert_eq!(har.log.entries.len(), 0);
+    }
+
+    #[test]
+    fn test_convert_to_har_with_request() {
+        let mut capture = NetworkCapture::new();
+        capture.add_request(
+            "req-1".to_string(),
+            "GET".to_string(),
+            "https://example.com/api".to_string(),
+        );
+
+        let mut headers = HashMap::new();
+        headers.insert("User-Agent".to_string(), "Test".to_string());
+        capture.set_request_headers("req-1", headers);
+
+        capture.add_response(
+            "req-1",
+            200,
+            "OK".to_string(),
+            HashMap::new(),
+        );
+        capture.mark_completed("req-1", 1234);
+
+        let har = capture.to_har();
+
+        assert_eq!(har.log.entries.len(), 1);
+        let entry = &har.log.entries[0];
+        assert_eq!(entry.request.method, "GET");
+        assert_eq!(entry.request.url, "https://example.com/api");
+        assert_eq!(entry.response.status, 200);
+    }
+
+    #[test]
+    fn test_convert_to_har_with_post_data() {
+        let mut capture = NetworkCapture::new();
+        capture.add_request(
+            "req-1".to_string(),
+            "POST".to_string(),
+            "https://api.example.com/data".to_string(),
+        );
+        capture.set_request_post_data("req-1", r#"{"key":"value"}"#.to_string());
+
+        let har = capture.to_har();
+
+        assert_eq!(har.log.entries.len(), 1);
+        let entry = &har.log.entries[0];
+        assert!(entry.request.post_data.is_some());
+        assert_eq!(entry.request.post_data.as_ref().unwrap().text.as_ref().unwrap(), r#"{"key":"value"}"#);
     }
 }
