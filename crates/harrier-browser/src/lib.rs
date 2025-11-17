@@ -2,9 +2,11 @@
 
 mod chrome_finder;
 mod error;
+mod profile;
 
 pub use chrome_finder::ChromeFinder;
 pub use error::{Error, Result};
+pub use profile::ProfileManager;
 
 // Placeholder for Chrome launcher implementation
 pub struct ChromeLauncher;
