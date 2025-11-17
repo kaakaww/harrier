@@ -3,8 +3,7 @@ use std::time::{Duration, SystemTime};
 
 use chrono::{DateTime, Utc};
 use harrier_core::har::{
-    Cache, Content, Creator, Entry, Har, Header, Log, PostData,
-    Request, Response, Timings,
+    Cache, Content, Creator, Entry, Har, Header, Log, PostData, Request, Response, Timings,
 };
 
 /// Represents a captured network request with optional response
@@ -170,7 +169,8 @@ impl NetworkCapture {
                     .map(|s| s.len() as i64)
                     .unwrap_or(-1),
                 post_data: net_req.post_data.as_ref().map(|text| PostData {
-                    mime_type: net_req.request_headers
+                    mime_type: net_req
+                        .request_headers
                         .get("content-type")
                         .cloned()
                         .unwrap_or_else(|| "application/octet-stream".to_string()),
@@ -294,7 +294,10 @@ mod tests {
         );
         req.request_headers = headers.clone();
 
-        assert_eq!(req.request_headers.get("Content-Type").unwrap(), "application/json");
+        assert_eq!(
+            req.request_headers.get("Content-Type").unwrap(),
+            "application/json"
+        );
     }
 
     #[test]
@@ -341,12 +344,7 @@ mod tests {
         headers.insert("User-Agent".to_string(), "Test".to_string());
         capture.set_request_headers("req-1", headers);
 
-        capture.add_response(
-            "req-1",
-            200,
-            "OK".to_string(),
-            HashMap::new(),
-        );
+        capture.add_response("req-1", 200, "OK".to_string(), HashMap::new());
         capture.mark_completed("req-1", 1234);
 
         let har = capture.to_har();
@@ -373,6 +371,16 @@ mod tests {
         assert_eq!(har.log.entries.len(), 1);
         let entry = &har.log.entries[0];
         assert!(entry.request.post_data.is_some());
-        assert_eq!(entry.request.post_data.as_ref().unwrap().text.as_ref().unwrap(), r#"{"key":"value"}"#);
+        assert_eq!(
+            entry
+                .request
+                .post_data
+                .as_ref()
+                .unwrap()
+                .text
+                .as_ref()
+                .unwrap(),
+            r#"{"key":"value"}"#
+        );
     }
 }

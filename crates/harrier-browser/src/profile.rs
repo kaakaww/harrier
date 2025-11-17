@@ -10,8 +10,7 @@ pub struct ProfileManager {
 impl ProfileManager {
     /// Create a temporary profile that will be deleted on drop
     pub fn temporary() -> Result<Self> {
-        let temp_dir = tempfile::tempdir()
-            .map_err(Error::Io)?;
+        let temp_dir = tempfile::tempdir().map_err(Error::Io)?;
 
         let path = temp_dir.keep();
 
@@ -25,8 +24,7 @@ impl ProfileManager {
     pub fn persistent(path: PathBuf) -> Result<Self> {
         // Create directory if it doesn't exist
         if !path.exists() {
-            std::fs::create_dir_all(&path)
-                .map_err(Error::Io)?;
+            std::fs::create_dir_all(&path).map_err(Error::Io)?;
         }
 
         Ok(Self {

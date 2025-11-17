@@ -74,8 +74,7 @@ impl ChromeFinder {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let metadata = std::fs::metadata(path)
-                .map_err(Error::Io)?;
+            let metadata = std::fs::metadata(path).map_err(Error::Io)?;
             let permissions = metadata.permissions();
             if permissions.mode() & 0o111 == 0 {
                 return Err(Error::Browser(format!(

@@ -61,13 +61,11 @@ pub fn execute(
         let cdp_session = CdpSession::new(debugging_port);
 
         // Spawn CDP capture task
-        let capture_handle = tokio::spawn(async move {
-            cdp_session.capture_traffic().await
-        });
+        let capture_handle = tokio::spawn(async move { cdp_session.capture_traffic().await });
 
         // Step 6: Wait for Chrome to exit or Ctrl+C
-        use tokio::signal;
         use std::io::{self, Write};
+        use tokio::signal;
 
         tokio::select! {
             // Chrome exits naturally
@@ -101,7 +99,8 @@ pub fn execute(
         // Chrome is manually closed by the user.
 
         // Step 7: Get captured traffic
-        let network_capture = capture_handle.await
+        let network_capture = capture_handle
+            .await
             .map_err(|e| anyhow::anyhow!("CDP capture task failed: {}", e))??;
 
         let request_count = network_capture.count();
@@ -163,10 +162,7 @@ fn run_hawk_scan(har_path: &Path) -> Result<()> {
     }
 
     // Run hawk scan
-    let output = Command::new("hawk")
-        .arg("scan")
-        .arg(har_path)
-        .output()?;
+    let output = Command::new("hawk").arg("scan").arg(har_path).output()?;
 
     if !output.status.success() {
         return Err(anyhow::anyhow!(

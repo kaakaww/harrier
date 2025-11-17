@@ -12,11 +12,7 @@ pub struct ChromeLauncher {
 
 impl ChromeLauncher {
     /// Create a new ChromeLauncher
-    pub fn new(
-        chrome_path: PathBuf,
-        profile_path: PathBuf,
-        initial_url: Option<String>,
-    ) -> Self {
+    pub fn new(chrome_path: PathBuf, profile_path: PathBuf, initial_url: Option<String>) -> Self {
         Self {
             chrome_path,
             profile_path,
@@ -50,7 +46,7 @@ impl ChromeLauncher {
         args.push(
             self.initial_url
                 .clone()
-                .unwrap_or_else(|| "about:blank".to_string())
+                .unwrap_or_else(|| "about:blank".to_string()),
         );
 
         args
