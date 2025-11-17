@@ -1,7 +1,9 @@
 // Browser automation functionality - to be implemented in future phases
 
-pub mod error;
+mod chrome_finder;
+mod error;
 
+pub use chrome_finder::ChromeFinder;
 pub use error::{Error, Result};
 
 // Placeholder for Chrome launcher implementation
