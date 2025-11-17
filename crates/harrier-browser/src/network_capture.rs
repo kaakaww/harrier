@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
+use chrono::{DateTime, Utc};
 use harrier_core::har::{
     Cache, Content, Creator, Entry, Har, Header, Log, PostData,
     Request, Response, Timings,
@@ -150,7 +151,10 @@ impl NetworkCapture {
 
         Entry {
             page_ref: None,
-            started_date_time: format!("{:?}", net_req.started_at),
+            started_date_time: {
+                let datetime: DateTime<Utc> = net_req.started_at.into();
+                datetime.to_rfc3339()
+            },
             time: duration.as_millis() as f64,
             request: Request {
                 method: net_req.method.clone(),
@@ -166,7 +170,10 @@ impl NetworkCapture {
                     .map(|s| s.len() as i64)
                     .unwrap_or(-1),
                 post_data: net_req.post_data.as_ref().map(|text| PostData {
-                    mime_type: "application/json".to_string(),
+                    mime_type: net_req.request_headers
+                        .get("content-type")
+                        .cloned()
+                        .unwrap_or_else(|| "application/octet-stream".to_string()),
                     text: Some(text.clone()),
                     params: None,
                     comment: None,
