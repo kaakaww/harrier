@@ -1998,18 +1998,18 @@ Co-Authored-By: Claude <noreply@anthropic.com)"
 Test the following scenarios manually:
 
 ```markdown
-- [ ] Run `harrier chrome --help` - shows all options
-- [ ] Run `harrier chrome` - launches Chrome (if installed)
-- [ ] Close Chrome - command exits, writes HAR file
-- [ ] Run with `--profile test-profile` - creates persistent profile
-- [ ] Run again with same profile - reuses profile (cookies persist)
-- [ ] Run with `--url https://example.com` - Chrome opens to that URL
-- [ ] Run with `--hosts "*.api.com"` - filter flag accepted
-- [ ] Press Ctrl+C during capture - shows prompt
-- [ ] Answer 'n' to prompt - capture continues
-- [ ] Answer 'y' to prompt - saves HAR
-- [ ] Check HAR file format - valid JSON, has log.version = "1.2"
-- [ ] Run `harrier stats chrome-capture.har` - stats work on captured HAR
+- [x] Run `harrier chrome --help` - shows all options
+- [x] Run `harrier chrome` - launches Chrome (if installed)
+- [x] Close Chrome - command exits, writes HAR file
+- [x] Run with `--profile test-profile` - creates persistent profile
+- [x] Run again with same profile - reuses profile (cookies persist)
+- [x] Run with `--url https://example.com` - Chrome opens to that URL
+- [x] Run with `--hosts "*.api.com"` - filter flag accepted
+- [x] Press Ctrl+C during capture - shows prompt
+- [-] Answer 'n' to prompt - capture continues - kills chrome before prompting, doesn't save HAR.
+- [x] Answer 'y' to prompt - saves HAR
+- [x] Check HAR file format - valid JSON, has log.version = "1.2"
+- [x] Run `harrier stats chrome-capture.har` - stats work on captured HAR
 - [ ] Run with `--scan` but no hawk installed - error message helpful
 ```
 

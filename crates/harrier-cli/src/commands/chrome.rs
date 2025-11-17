@@ -67,36 +67,52 @@ pub fn execute(
         use std::io::{self, Write};
         use tokio::signal;
 
+        // Spawn Chrome wait task but keep handle alive
+        let mut wait_task = tokio::task::spawn_blocking(move || chrome_process.wait());
+
+        // Track if Ctrl+C was pressed
+        let mut ctrl_c_pressed = false;
+
         tokio::select! {
             // Chrome exits naturally
-            result = tokio::task::spawn_blocking(move || chrome_process.wait()) => {
+            result = &mut wait_task => {
                 let status = result??;
                 println!("🛑 Chrome closed (exit code: {})", status.code().unwrap_or(-1));
             }
 
             // User presses Ctrl+C
             _ = signal::ctrl_c() => {
-                print!("\n⚠️  Chrome is still running. Close Chrome and save HAR? (y/n): ");
-                io::stdout().flush()?;
-
-                let mut input = String::new();
-                io::stdin().read_line(&mut input)?;
-
-                if input.trim().eq_ignore_ascii_case("y") {
-                    println!("⏳ Waiting for Chrome to close...");
-                    // Chrome process was moved into spawn_blocking, can't kill here
-                    // For MVP, just proceed with saving
-                    println!("   Please close all Chrome windows to complete capture");
-                } else {
-                    println!("❌ Capture cancelled");
-                    return Ok(());
-                }
+                ctrl_c_pressed = true;
             }
         }
 
-        // Note: After user confirms with "y", we continue to wait for Chrome to exit
-        // and capture_handle to complete. The spawn_blocking task will finish when
-        // Chrome is manually closed by the user.
+        // Handle Ctrl+C case - wait_task is still valid here if Chrome didn't exit naturally
+        if ctrl_c_pressed {
+            print!("\n⚠️  Chrome is still running. Close Chrome and save HAR? (y/n): ");
+            io::stdout().flush()?;
+
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+
+            if input.trim().eq_ignore_ascii_case("y") {
+                println!("⏳ Waiting for Chrome to close...");
+                println!("   Please close all Chrome windows to complete capture");
+
+                // Wait for Chrome to actually close using the existing wait_task
+                let status = wait_task.await??;
+                println!(
+                    "🛑 Chrome closed (exit code: {})",
+                    status.code().unwrap_or(-1)
+                );
+            } else {
+                println!("❌ Capture cancelled - Chrome will continue running");
+                println!("   Note: HAR capture has stopped, but Chrome remains open");
+
+                // Drop wait_task to detach from Chrome process
+                drop(wait_task);
+                return Ok(());
+            }
+        }
 
         // Step 7: Get captured traffic
         let network_capture = capture_handle
