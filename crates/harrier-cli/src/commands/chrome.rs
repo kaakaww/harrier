@@ -147,14 +147,16 @@ pub fn execute(
         };
 
         // Handle the action
-        match action {
+        let network_capture = match action {
             Action::StopCapture => {
-                // Abort CDP capture task
+                // Abort CDP capture task and return empty capture
                 capture_handle.abort();
                 println!("✅ Capture stopped - Chrome continues running");
                 println!("   Note: Chrome remains open for continued use");
                 // Drop wait_task to detach from Chrome (if still present)
                 drop(wait_task);
+                // Create empty capture since we stopped early
+                harrier_browser::NetworkCapture::new()
             }
             Action::KillChrome => {
                 // Kill Chrome by PID and wait for exit
@@ -164,6 +166,10 @@ pub fn execute(
                     let status = task.await??;
                     println!("✅ Chrome stopped (exit code: {})", status.code().unwrap_or(-1));
                 }
+                // Get captured traffic
+                capture_handle
+                    .await
+                    .map_err(|e| anyhow::anyhow!("CDP capture task failed: {}", e))??
             }
             Action::AbortAll => {
                 // Kill Chrome and exit immediately without saving HAR
@@ -176,14 +182,14 @@ pub fn execute(
                 return Ok(());
             }
             Action::ChromeExited => {
-                // Chrome exited naturally, continue normally (task already consumed)
+                // Chrome exited naturally, get captured traffic
+                capture_handle
+                    .await
+                    .map_err(|e| anyhow::anyhow!("CDP capture task failed: {}", e))??
             }
-        }
+        };
 
-        // Step 7: Get captured traffic
-        let network_capture = capture_handle
-            .await
-            .map_err(|e| anyhow::anyhow!("CDP capture task failed: {}", e))??;
+        // Step 7: Process captured traffic
 
         let request_count = network_capture.count();
         println!("📊 Captured {} HTTP requests", request_count);
