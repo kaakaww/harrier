@@ -2,6 +2,24 @@ use anyhow::Result;
 use harrier_browser::{CdpSession, ChromeFinder, ChromeLauncher, ProfileManager};
 use std::path::{Path, PathBuf};
 
+/// Kill a process by PID (cross-platform)
+fn kill_process_by_pid(pid: u32) {
+    #[cfg(unix)]
+    {
+        use std::process::Command;
+        // Use kill command to send SIGTERM
+        let _ = Command::new("kill").arg(pid.to_string()).output();
+    }
+
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        let _ = Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .output();
+    }
+}
+
 pub fn execute(
     output: &Path,
     hosts: Vec<String>,
@@ -47,6 +65,7 @@ pub fn execute(
         // Step 4: Launch Chrome
         println!("🚀 Launching Chrome...");
         let mut chrome_process = launcher.launch()?;
+        let chrome_pid = chrome_process.id();
         println!("✅ Chrome started successfully");
 
         if let Some(start_url) = url {
@@ -54,8 +73,13 @@ pub fn execute(
         }
 
         println!("📊 Capturing network traffic...");
-        println!("   • Close Chrome when done");
-        println!("   • Or press Ctrl+C to prompt shutdown");
+        println!();
+        println!("What would you like to do?");
+        println!("  s) Stop capturing and save HAR (Chrome continues)");
+        println!("  k) Kill Chrome and save HAR");
+        println!("  a) Abort everything - kill Chrome, no HAR, no scan");
+        println!();
+        println!("Press a key when ready, or close Chrome naturally...");
 
         // Step 5: Create CDP session and start capture
         let cdp_session = CdpSession::new(debugging_port);
@@ -63,54 +87,96 @@ pub fn execute(
         // Spawn CDP capture task
         let capture_handle = tokio::spawn(async move { cdp_session.capture_traffic().await });
 
-        // Step 6: Wait for Chrome to exit or Ctrl+C
-        use std::io::{self, Write};
-        use tokio::signal;
+        // Step 6: Wait for Chrome to exit or user input
+        use console::Term;
 
-        // Spawn Chrome wait task but keep handle alive
-        let mut wait_task = tokio::task::spawn_blocking(move || chrome_process.wait());
+        // Spawn user input task (non-blocking read)
+        let input_task = tokio::task::spawn_blocking(move || {
+            let term = Term::stdout();
+            term.read_char()
+        });
 
-        // Track if Ctrl+C was pressed
-        let mut ctrl_c_pressed = false;
+        // Spawn Chrome wait task (wrap in Option for conditional consumption)
+        let wait_task = tokio::task::spawn_blocking(move || chrome_process.wait());
+        let mut wait_task = Some(wait_task);
 
-        tokio::select! {
-            // Chrome exits naturally
-            result = &mut wait_task => {
-                let status = result??;
-                println!("🛑 Chrome closed (exit code: {})", status.code().unwrap_or(-1));
-            }
-
-            // User presses Ctrl+C
-            _ = signal::ctrl_c() => {
-                ctrl_c_pressed = true;
-            }
+        // Wait for either Chrome to exit or user to press a key
+        enum Action {
+            ChromeExited,
+            StopCapture,
+            KillChrome,
+            AbortAll,
         }
 
-        // Handle Ctrl+C case - wait_task is still valid here if Chrome didn't exit naturally
-        if ctrl_c_pressed {
-            print!("\n⚠️  Chrome is still running. Close Chrome and save HAR? (y/n): ");
-            io::stdout().flush()?;
+        let action = tokio::select! {
+            // Chrome exits naturally
+            result = wait_task.as_mut().unwrap() => {
+                let status = result??;
+                let exit_code = status.code().unwrap_or(-1);
+                println!("\n🛑 Chrome closed (exit code: {})", exit_code);
+                wait_task = None; // Task consumed
+                Action::ChromeExited
+            }
 
-            let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
+            // User presses a key
+            result = input_task => {
+                let key = result??;
+                match key.to_lowercase().next().unwrap_or(' ') {
+                    's' => {
+                        println!("\n⏹️  Stopping capture...");
+                        Action::StopCapture
+                    }
+                    'k' => {
+                        println!("\n🛑 Killing Chrome...");
+                        Action::KillChrome
+                    }
+                    'a' => {
+                        println!("\n❌ Aborting everything...");
+                        Action::AbortAll
+                    }
+                    _ => {
+                        // Invalid key - wait for Chrome to exit naturally
+                        println!("\n⚠️  Invalid key '{}'. Waiting for Chrome to close naturally...", key);
+                        let status = wait_task.take().unwrap().await??;
+                        let exit_code = status.code().unwrap_or(-1);
+                        println!("🛑 Chrome closed (exit code: {})", exit_code);
+                        Action::ChromeExited
+                    }
+                }
+            }
+        };
 
-            if input.trim().eq_ignore_ascii_case("y") {
-                println!("⏳ Waiting for Chrome to close...");
-                println!("   Please close all Chrome windows to complete capture");
-
-                // Wait for Chrome to actually close using the existing wait_task
-                let status = wait_task.await??;
-                println!(
-                    "🛑 Chrome closed (exit code: {})",
-                    status.code().unwrap_or(-1)
-                );
-            } else {
-                println!("❌ Capture cancelled - Chrome will continue running");
-                println!("   Note: HAR capture has stopped, but Chrome remains open");
-
-                // Drop wait_task to detach from Chrome process
+        // Handle the action
+        match action {
+            Action::StopCapture => {
+                // Abort CDP capture task
+                capture_handle.abort();
+                println!("✅ Capture stopped - Chrome continues running");
+                println!("   Note: Chrome remains open for continued use");
+                // Drop wait_task to detach from Chrome (if still present)
                 drop(wait_task);
+            }
+            Action::KillChrome => {
+                // Kill Chrome by PID and wait for exit
+                kill_process_by_pid(chrome_pid);
+                println!("⏳ Waiting for Chrome to terminate...");
+                if let Some(task) = wait_task.take() {
+                    let status = task.await??;
+                    println!("✅ Chrome stopped (exit code: {})", status.code().unwrap_or(-1));
+                }
+            }
+            Action::AbortAll => {
+                // Kill Chrome and exit immediately without saving HAR
+                kill_process_by_pid(chrome_pid);
+                println!("🛑 Killing Chrome...");
+                if let Some(task) = wait_task.take() {
+                    let _ = task.await; // Wait for termination but ignore result
+                }
+                println!("❌ Aborted - no HAR saved");
                 return Ok(());
+            }
+            Action::ChromeExited => {
+                // Chrome exited naturally, continue normally (task already consumed)
             }
         }
 
