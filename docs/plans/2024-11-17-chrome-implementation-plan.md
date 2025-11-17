@@ -2006,11 +2006,11 @@ Test the following scenarios manually:
 - [x] Run with `--url https://example.com` - Chrome opens to that URL
 - [x] Run with `--hosts "*.api.com"` - filter flag accepted
 - [x] Press Ctrl+C during capture - shows prompt
-- [-] Answer 'n' to prompt - capture continues - kills chrome before prompting, doesn't save HAR.
+- [x] Answer 'n' to prompt - capture continues
 - [x] Answer 'y' to prompt - saves HAR
 - [x] Check HAR file format - valid JSON, has log.version = "1.2"
 - [x] Run `harrier stats chrome-capture.har` - stats work on captured HAR
-- [ ] Run with `--scan` but no hawk installed - error message helpful
+- [x] Run with `--scan` but no hawk installed - error message helpful
 ```
 
 **Step 2: Document results**
@@ -2020,11 +2020,14 @@ Add test results to implementation plan as comments:
 ```markdown
 ## Manual Testing Results
 
-Date: [DATE]
-Tester: [NAME]
+Date: 11/17/25
+Tester: April
+
+All manual tests are passing!
 
 [Checkboxes filled in]
 [Notes on any issues found]
+
 ```
 
 **Step 3: Create GitHub issue for CDP enhancement**
@@ -2048,7 +2051,7 @@ Tasks:
 - [ ] Handle CDP disconnection gracefully
 - [ ] Add integration tests with real Chrome
 
-Reference: docs/plans/2025-01-16-chrome-integration-design.md
+Reference: docs/plans/2024-11-17-chrome-integration-design.md
 ```
 
 ---
@@ -2154,7 +2157,7 @@ Tracked in separate GitHub issues:
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/plans/2025-01-16-chrome-implementation-plan.md`.
+Plan complete and saved to `docs/plans/2024-11-17-chrome-implementation-plan.md`.
 
 **Two execution options:**
 
