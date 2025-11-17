@@ -153,8 +153,10 @@ pub fn execute(
                 capture_handle.abort();
                 println!("✅ Capture stopped - Chrome continues running");
                 println!("   Note: Chrome remains open for continued use");
-                // Drop wait_task to detach from Chrome (if still present)
-                drop(wait_task);
+                // Abort wait_task to stop waiting for Chrome (if still present)
+                if let Some(task) = wait_task.take() {
+                    task.abort();
+                }
                 // Create empty capture since we stopped early
                 harrier_browser::NetworkCapture::new()
             }
