@@ -8,7 +8,9 @@ fn test_chrome_command_help() {
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Launch Chrome and capture HAR traffic"))
+        .stdout(predicate::str::contains(
+            "Launch Chrome and capture HAR traffic",
+        ))
         .stdout(predicate::str::contains("--output"))
         .stdout(predicate::str::contains("--hosts"))
         .stdout(predicate::str::contains("--scan"))
@@ -25,13 +27,18 @@ fn test_chrome_command_without_chrome() {
         "/usr/bin/chromium",
     ];
 
-    if chrome_paths.iter().any(|p| std::path::Path::new(p).exists()) {
+    if chrome_paths
+        .iter()
+        .any(|p| std::path::Path::new(p).exists())
+    {
         println!("Skipping test - Chrome is installed");
         return;
     }
 
     let mut cmd = Command::cargo_bin("harrier").expect("failed to find harrier binary");
-    cmd.arg("chrome").arg("--chrome-path").arg("/nonexistent/chrome");
+    cmd.arg("chrome")
+        .arg("--chrome-path")
+        .arg("/nonexistent/chrome");
 
     cmd.assert()
         .failure()
