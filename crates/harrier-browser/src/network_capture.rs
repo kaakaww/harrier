@@ -50,6 +50,10 @@ pub struct NetworkResponse {
     pub status: u16,
     pub status_text: String,
     pub headers: HashMap<String, String>,
+    pub body: Option<String>,
+    pub body_base64_encoded: bool,
+    pub body_truncated: bool,
+    pub original_body_size: Option<i64>,
 }
 
 /// Manages network event capture
@@ -98,6 +102,10 @@ impl NetworkCapture {
                 status,
                 status_text,
                 headers,
+                body: None,
+                body_base64_encoded: false,
+                body_truncated: false,
+                original_body_size: None,
             });
         }
     }
@@ -265,6 +273,41 @@ impl Default for NetworkCapture {
     }
 }
 
+/// Maximum response body size before truncation (15 MB for HawkScan compatibility)
+pub const MAX_RESPONSE_BODY_SIZE: usize = 15 * 1024 * 1024;
+
+/// Truncate a UTF-8 string at a character boundary
+///
+/// Ensures the truncation happens at a valid UTF-8 character boundary
+/// to avoid corrupting the string.
+pub fn truncate_utf8(s: &str, max_bytes: usize) -> String {
+    if s.len() <= max_bytes {
+        return s.to_string();
+    }
+
+    // Find valid UTF-8 boundary at or before max_bytes
+    let mut boundary = max_bytes;
+    while boundary > 0 && !s.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+
+    s[..boundary].to_string()
+}
+
+/// Truncate a base64 string at a 4-character boundary
+///
+/// Base64 encoding requires strings to be multiples of 4 characters.
+/// This ensures the truncated string is still valid base64.
+pub fn truncate_base64(s: &str, max_bytes: usize) -> String {
+    if s.len() <= max_bytes {
+        return s.to_string();
+    }
+
+    // Base64 must be multiple of 4 characters
+    let boundary = (max_bytes / 4) * 4;
+    s[..boundary].to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,6 +358,10 @@ mod tests {
             status: 200,
             status_text: "OK".to_string(),
             headers,
+            body: None,
+            body_base64_encoded: false,
+            body_truncated: false,
+            original_body_size: None,
         });
 
         assert!(req.response.is_some());
