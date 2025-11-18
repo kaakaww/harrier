@@ -159,24 +159,35 @@ pub fn execute(
                 if let Some(task) = wait_task.take() {
                     task.abort();
                 }
-                // Get captured traffic
-                capture_rx
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to receive capture data: {}", e))?
+                // Get captured traffic with timeout
+                tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    capture_rx
+                )
+                .await
+                .map_err(|_| anyhow::anyhow!("Timeout waiting for capture data"))?
+                .map_err(|e| anyhow::anyhow!("Failed to receive capture data: {}", e))?
             }
             Action::KillChrome => {
-                // Kill Chrome by PID and wait for exit
+                // Signal CDP to stop and get captured traffic BEFORE killing Chrome
+                let _ = shutdown_tx.send(());
+                let capture = tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    capture_rx
+                )
+                .await
+                .map_err(|_| anyhow::anyhow!("Timeout waiting for capture data"))?
+                .map_err(|e| anyhow::anyhow!("Failed to receive capture data: {}", e))?;
+
+                // Now kill Chrome and wait for exit
                 kill_process_by_pid(chrome_pid);
                 println!("⏳ Waiting for Chrome to terminate...");
                 if let Some(task) = wait_task.take() {
                     let status = task.await??;
                     println!("✅ Chrome stopped (exit code: {})", status.code().unwrap_or(-1));
                 }
-                // Signal CDP to stop and get captured traffic
-                let _ = shutdown_tx.send(());
-                capture_rx
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to receive capture data: {}", e))?
+
+                capture
             }
             Action::AbortAll => {
                 // Kill Chrome and exit immediately without saving HAR
@@ -191,9 +202,13 @@ pub fn execute(
             Action::ChromeExited => {
                 // Chrome exited naturally, signal CDP to stop and get captured traffic
                 let _ = shutdown_tx.send(());
-                capture_rx
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to receive capture data: {}", e))?
+                tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    capture_rx
+                )
+                .await
+                .map_err(|_| anyhow::anyhow!("Timeout waiting for capture data"))?
+                .map_err(|e| anyhow::anyhow!("Failed to receive capture data: {}", e))?
             }
         };
 
