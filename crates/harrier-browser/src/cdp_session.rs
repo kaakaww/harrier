@@ -6,6 +6,7 @@ use chromiumoxide::cdp::browser_protocol::network::{
 };
 use futures::StreamExt;
 use std::collections::HashMap;
+use tokio::sync::oneshot;
 
 /// Manages Chrome DevTools Protocol session
 pub struct CdpSession {
@@ -19,7 +20,11 @@ impl CdpSession {
     }
 
     /// Connect to Chrome and capture network traffic
-    pub async fn capture_traffic(&self) -> Result<NetworkCapture> {
+    ///
+    /// Returns a tuple of (shutdown_sender, capture_receiver) where:
+    /// - shutdown_sender: Send () to stop capturing and get results
+    /// - capture_receiver: Receives the NetworkCapture when shutdown is triggered
+    pub async fn capture_traffic(&self) -> Result<(oneshot::Sender<()>, oneshot::Receiver<NetworkCapture>)> {
         tracing::info!(
             "CDP session: connecting to Chrome on port {}",
             self.debugging_port
@@ -48,6 +53,10 @@ impl CdpSession {
         let mut response_events = page.event_listener::<EventResponseReceived>().await?;
         let mut loading_finished_events = page.event_listener::<EventLoadingFinished>().await?;
 
+        // Create shutdown channel
+        let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
+        let (result_tx, result_rx) = oneshot::channel::<NetworkCapture>();
+
         // Spawn handler task to process CDP protocol messages
         let handler_task = tokio::spawn(async move {
             while let Some(event) = handler.next().await {
@@ -60,11 +69,16 @@ impl CdpSession {
 
         // Spawn event processing task
         let page_clone = page.clone();
-        let capture_task = tokio::spawn(async move {
+        tokio::spawn(async move {
             let mut capture = NetworkCapture::new();
 
             loop {
                 tokio::select! {
+                    // Check for shutdown signal first
+                    _ = &mut shutdown_rx => {
+                        tracing::info!("CDP capture: shutdown signal received, stopping capture");
+                        break;
+                    }
                     Some(event) = request_events.next() => {
                         tracing::debug!("Request: {} {}", event.request.method, event.request.url);
                         let request_id = event.request_id.inner().to_string();
@@ -134,21 +148,15 @@ impl CdpSession {
                             );
                         }
                     }
-                    else => break,
                 }
             }
 
-            capture
+            // Send the capture back and cleanup
+            let _ = result_tx.send(capture);
+            handler_task.abort();
         });
 
-        // Wait indefinitely until the function is aborted or Chrome closes
-        // In practice, this will be interrupted by the parent task being aborted
-        let capture = capture_task.await.map_err(|e| crate::Error::Cdp(e.to_string()))?;
-
-        // Cleanup
-        handler_task.abort();
-
-        Ok(capture)
+        Ok((shutdown_tx, result_rx))
     }
 }
 

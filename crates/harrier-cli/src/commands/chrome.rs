@@ -86,8 +86,8 @@ pub fn execute(
         // Step 5: Create CDP session and start capture
         let cdp_session = CdpSession::new(debugging_port);
 
-        // Spawn CDP capture task
-        let capture_handle = tokio::spawn(async move { cdp_session.capture_traffic().await });
+        // Start CDP capture (returns shutdown channel and result receiver)
+        let (shutdown_tx, capture_rx) = cdp_session.capture_traffic().await?;
 
         // Step 6: Wait for Chrome to exit or user input
         use console::Term;
@@ -151,16 +151,18 @@ pub fn execute(
         // Handle the action
         let network_capture = match action {
             Action::StopCapture => {
-                // Abort CDP capture task and return empty capture
-                capture_handle.abort();
+                // Signal CDP to stop capturing and get results
+                let _ = shutdown_tx.send(());
                 println!("✅ Capture stopped - Chrome continues running");
                 println!("   Note: Chrome remains open for continued use");
                 // Abort wait_task to stop waiting for Chrome (if still present)
                 if let Some(task) = wait_task.take() {
                     task.abort();
                 }
-                // Create empty capture since we stopped early
-                harrier_browser::NetworkCapture::new()
+                // Get captured traffic
+                capture_rx
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to receive capture data: {}", e))?
             }
             Action::KillChrome => {
                 // Kill Chrome by PID and wait for exit
@@ -170,10 +172,11 @@ pub fn execute(
                     let status = task.await??;
                     println!("✅ Chrome stopped (exit code: {})", status.code().unwrap_or(-1));
                 }
-                // Get captured traffic
-                capture_handle
+                // Signal CDP to stop and get captured traffic
+                let _ = shutdown_tx.send(());
+                capture_rx
                     .await
-                    .map_err(|e| anyhow::anyhow!("CDP capture task failed: {}", e))??
+                    .map_err(|e| anyhow::anyhow!("Failed to receive capture data: {}", e))?
             }
             Action::AbortAll => {
                 // Kill Chrome and exit immediately without saving HAR
@@ -186,10 +189,11 @@ pub fn execute(
                 return Ok(());
             }
             Action::ChromeExited => {
-                // Chrome exited naturally, get captured traffic
-                capture_handle
+                // Chrome exited naturally, signal CDP to stop and get captured traffic
+                let _ = shutdown_tx.send(());
+                capture_rx
                     .await
-                    .map_err(|e| anyhow::anyhow!("CDP capture task failed: {}", e))??
+                    .map_err(|e| anyhow::anyhow!("Failed to receive capture data: {}", e))?
             }
         };
 
