@@ -34,7 +34,6 @@ impl CdpSession {
         let ws_url = format!("http://localhost:{}", self.debugging_port);
         let (browser, mut handler) = {
             let mut retries = 5;
-            let mut last_error = None;
             loop {
                 tracing::debug!("Attempting CDP connection to {}...", ws_url);
                 match Browser::connect(&ws_url).await {
@@ -43,12 +42,11 @@ impl CdpSession {
                         break result;
                     },
                     Err(e) => {
-                        last_error = Some(e);
                         retries -= 1;
                         if retries == 0 {
                             return Err(crate::Error::Cdp(format!(
                                 "Failed to connect to Chrome after 5 attempts: {}",
-                                last_error.unwrap()
+                                e
                             )));
                         }
                         tracing::info!("CDP connection attempt failed, retrying... ({} left)", retries);

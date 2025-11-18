@@ -127,14 +127,13 @@ impl NetworkCapture {
         truncated: bool,
         original_size: Option<i64>,
     ) {
-        if let Some(req) = self.requests.get_mut(request_id) {
-            if let Some(resp) = &mut req.response {
+        if let Some(req) = self.requests.get_mut(request_id)
+            && let Some(resp) = &mut req.response {
                 resp.body = Some(body);
                 resp.body_base64_encoded = base64_encoded;
                 resp.body_truncated = truncated;
                 resp.original_body_size = original_size;
             }
-        }
     }
 
     /// Get all captured requests
