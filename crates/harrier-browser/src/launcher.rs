@@ -42,12 +42,17 @@ impl ChromeLauncher {
             format!("--user-data-dir={}", self.profile_path.display()),
         ];
 
-        // Add initial URL
-        args.push(
-            self.initial_url
-                .clone()
-                .unwrap_or_else(|| "about:blank".to_string()),
-        );
+        // Add initial URL with proper scheme
+        if let Some(url) = &self.initial_url {
+            let url = if !url.starts_with("http://") && !url.starts_with("https://") {
+                format!("https://{}", url)
+            } else {
+                url.clone()
+            };
+            args.push(url);
+        } else {
+            args.push("about:blank".to_string());
+        }
 
         args
     }

@@ -63,19 +63,22 @@ impl CdpSession {
         let handler_task = tokio::spawn(async move {
             while let Some(event) = handler.next().await {
                 if let Err(e) = event {
-                    tracing::error!("CDP handler error: {}", e);
-                    break;
+                    // Log but don't stop - some CDP events may not be fully parseable
+                    tracing::debug!("CDP handler event error (continuing): {}", e);
                 }
             }
         });
 
         tracing::info!("CDP: Getting page list...");
         // Get the first page (or create new one)
+        // Wait a bit for Chrome to create its initial page
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
         let page = if let Some(page) = browser.pages().await?.first() {
             tracing::info!("CDP: Using existing page");
             page.clone()
         } else {
-            tracing::info!("CDP: Creating new page");
+            tracing::info!("CDP: No existing pages, creating new page");
             browser.new_page("about:blank").await?
         };
 
