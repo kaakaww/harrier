@@ -36,8 +36,12 @@ impl CdpSession {
             let mut retries = 5;
             let mut last_error = None;
             loop {
+                tracing::debug!("Attempting CDP connection to {}...", ws_url);
                 match Browser::connect(&ws_url).await {
-                    Ok(result) => break result,
+                    Ok(result) => {
+                        tracing::info!("CDP connection established");
+                        break result;
+                    },
                     Err(e) => {
                         last_error = Some(e);
                         retries -= 1;
@@ -47,17 +51,31 @@ impl CdpSession {
                                 last_error.unwrap()
                             )));
                         }
-                        tracing::debug!("CDP connection attempt failed, retrying... ({} left)", retries);
+                        tracing::info!("CDP connection attempt failed, retrying... ({} left)", retries);
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
                 }
             }
         };
 
+        // Spawn handler task IMMEDIATELY to process CDP protocol messages
+        // This must run for browser.pages() and other commands to work
+        let handler_task = tokio::spawn(async move {
+            while let Some(event) = handler.next().await {
+                if let Err(e) = event {
+                    tracing::error!("CDP handler error: {}", e);
+                    break;
+                }
+            }
+        });
+
+        tracing::info!("CDP: Getting page list...");
         // Get the first page (or create new one)
         let page = if let Some(page) = browser.pages().await?.first() {
+            tracing::info!("CDP: Using existing page");
             page.clone()
         } else {
+            tracing::info!("CDP: Creating new page");
             browser.new_page("about:blank").await?
         };
 
@@ -76,16 +94,6 @@ impl CdpSession {
         // Create shutdown channel
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
         let (result_tx, result_rx) = oneshot::channel::<NetworkCapture>();
-
-        // Spawn handler task to process CDP protocol messages
-        let handler_task = tokio::spawn(async move {
-            while let Some(event) = handler.next().await {
-                if let Err(e) = event {
-                    tracing::error!("CDP handler error: {}", e);
-                    break;
-                }
-            }
-        });
 
         // Spawn event processing task
         let page_clone = page.clone();
