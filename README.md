@@ -151,15 +151,31 @@ harrier chrome --url "https://app.example.com" \
 2. Chrome launches in headed mode so you can interact normally
 3. Network traffic is captured via Chrome DevTools Protocol (CDP)
 4. Browse, interact with web apps, or test workflows
-5. Close Chrome when done, and Harrier saves the HAR file
-6. Optionally filter traffic to specific hosts
-7. Optionally run StackHawk scan on the captured traffic
+5. When ready, press 's' to stop capture (Chrome continues), 'k' to kill Chrome and save, or close Chrome naturally
+6. Harrier saves the HAR file with all captured requests, responses, headers, and response bodies
+7. Response bodies larger than 15MB are automatically truncated for HawkScan compatibility
+8. Optionally filter traffic to specific hosts
+9. Optionally run StackHawk scan on the captured traffic
+
+**Interactive capture control:**
+
+When capturing traffic, you have three options:
+- **'s' key**: Stop capturing and save HAR (Chrome remains open)
+- **'k' key**: Kill Chrome and save HAR with captured traffic
+- **Close Chrome**: Naturally close Chrome to stop and save
 
 **Profile management:**
 
 - Default: Uses a temporary profile (cleaned up automatically)
 - `--profile <name>`: Uses persistent profile at `~/.harrier/profiles/<name>`
 - Persistent profiles retain cookies, sessions, and browser state between captures
+
+**Response body capture:**
+
+- All response bodies are captured and included in HAR files
+- Bodies larger than 15MB are truncated to meet HawkScan's 16MB limit
+- Both text and binary content supported (base64 encoding for binary)
+- Truncation metadata is preserved in the HAR file
 
 **Integration with StackHawk:**
 
@@ -172,7 +188,7 @@ harrier chrome --url "https://app.example.com/login" \
                --scan
 ```
 
-**MVP Status:** Chrome command is functional with stubbed CDP integration. Full network capture implementation (WebSocket connection to CDP, Network domain events) is planned for post-MVP.
+**Status:** ✅ Fully functional MVP - Chrome integration with complete network capture and response body support is complete and tested on macOS.
 
 ## Coming Soon
 
