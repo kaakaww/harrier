@@ -30,9 +30,29 @@ impl CdpSession {
             self.debugging_port
         );
 
-        // Connect to Chrome via CDP
+        // Connect to Chrome via CDP with retries (Chrome may not be fully ready)
         let ws_url = format!("http://localhost:{}", self.debugging_port);
-        let (browser, mut handler) = Browser::connect(ws_url).await?;
+        let (browser, mut handler) = {
+            let mut retries = 5;
+            let mut last_error = None;
+            loop {
+                match Browser::connect(&ws_url).await {
+                    Ok(result) => break result,
+                    Err(e) => {
+                        last_error = Some(e);
+                        retries -= 1;
+                        if retries == 0 {
+                            return Err(crate::Error::Cdp(format!(
+                                "Failed to connect to Chrome after 5 attempts: {}",
+                                last_error.unwrap()
+                            )));
+                        }
+                        tracing::debug!("CDP connection attempt failed, retrying... ({} left)", retries);
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    }
+                }
+            }
+        };
 
         // Get the first page (or create new one)
         let page = if let Some(page) = browser.pages().await?.first() {
