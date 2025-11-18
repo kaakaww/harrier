@@ -118,6 +118,25 @@ impl NetworkCapture {
         }
     }
 
+    /// Set response body with truncation information
+    pub fn set_response_body(
+        &mut self,
+        request_id: &str,
+        body: String,
+        base64_encoded: bool,
+        truncated: bool,
+        original_size: Option<i64>,
+    ) {
+        if let Some(req) = self.requests.get_mut(request_id) {
+            if let Some(resp) = &mut req.response {
+                resp.body = Some(body);
+                resp.body_base64_encoded = base64_encoded;
+                resp.body_truncated = truncated;
+                resp.original_body_size = original_size;
+            }
+        }
+    }
+
     /// Get all captured requests
     pub fn requests(&self) -> Vec<NetworkRequest> {
         self.requests.values().cloned().collect()
@@ -205,9 +224,21 @@ impl NetworkCapture {
                             .get("content-type")
                             .cloned()
                             .unwrap_or_else(|| "application/octet-stream".to_string()),
-                        text: None,
-                        encoding: None,
-                        comment: None,
+                        text: resp.body.clone(),
+                        encoding: if resp.body_base64_encoded {
+                            Some("base64".to_string())
+                        } else {
+                            None
+                        },
+                        comment: if resp.body_truncated {
+                            Some(format!(
+                                "Body truncated at {} bytes (original size: {} bytes)",
+                                MAX_RESPONSE_BODY_SIZE,
+                                resp.original_body_size.unwrap_or(0)
+                            ))
+                        } else {
+                            None
+                        },
                     },
                     redirect_url: String::new(),
                     headers_size: -1,
@@ -429,5 +460,76 @@ mod tests {
                 .unwrap(),
             r#"{"key":"value"}"#
         );
+    }
+
+    #[test]
+    fn test_truncate_utf8_below_max() {
+        let text = "Hello, world!";
+        let result = truncate_utf8(text, 100);
+        assert_eq!(result, text);
+    }
+
+    #[test]
+    fn test_truncate_utf8_at_max() {
+        let text = "Hello";
+        let result = truncate_utf8(text, 5);
+        assert_eq!(result, text);
+    }
+
+    #[test]
+    fn test_truncate_utf8_above_max() {
+        let text = "Hello, world!";
+        let result = truncate_utf8(text, 5);
+        assert_eq!(result, "Hello");
+    }
+
+    #[test]
+    fn test_truncate_utf8_multibyte_boundary() {
+        // "Hello🌍" - emoji is 4 bytes
+        let text = "Hello🌍";
+        let result = truncate_utf8(text, 7); // Should truncate before emoji
+        assert_eq!(result, "Hello");
+    }
+
+    #[test]
+    fn test_truncate_utf8_multibyte_fits() {
+        // "Hello🌍" - emoji is 4 bytes (total 9 bytes)
+        let text = "Hello🌍";
+        let result = truncate_utf8(text, 10); // Should include emoji
+        assert_eq!(result, text);
+    }
+
+    #[test]
+    fn test_truncate_base64_below_max() {
+        let base64 = "SGVsbG8="; // "Hello" in base64 (8 chars)
+        let result = truncate_base64(base64, 100);
+        assert_eq!(result, base64);
+    }
+
+    #[test]
+    fn test_truncate_base64_at_boundary() {
+        let base64 = "SGVsbG8="; // 8 chars (multiple of 4)
+        let result = truncate_base64(base64, 8);
+        assert_eq!(result, base64);
+    }
+
+    #[test]
+    fn test_truncate_base64_not_at_boundary() {
+        let base64 = "SGVsbG8gV29ybGQh"; // 16 chars
+        let result = truncate_base64(base64, 10); // Should truncate to 8 (multiple of 4)
+        assert_eq!(result, "SGVsbG8g"); // First 8 chars
+        assert_eq!(result.len(), 8);
+    }
+
+    #[test]
+    fn test_truncate_base64_zero() {
+        let base64 = "SGVsbG8=";
+        let result = truncate_base64(base64, 0);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_max_response_body_size() {
+        assert_eq!(MAX_RESPONSE_BODY_SIZE, 15 * 1024 * 1024);
     }
 }
