@@ -1,7 +1,10 @@
-use crate::{network_capture::{truncate_base64, truncate_utf8, MAX_RESPONSE_BODY_SIZE}, NetworkCapture, Result};
+use crate::{
+    NetworkCapture, Result,
+    network_capture::{MAX_RESPONSE_BODY_SIZE, truncate_base64, truncate_utf8},
+};
 use chromiumoxide::browser::Browser;
 use chromiumoxide::cdp::browser_protocol::network::{
-    EnableParams, EventRequestWillBeSent, EventResponseReceived, EventLoadingFinished,
+    EnableParams, EventLoadingFinished, EventRequestWillBeSent, EventResponseReceived,
     GetResponseBodyParams,
 };
 use futures::StreamExt;
@@ -24,7 +27,9 @@ impl CdpSession {
     /// Returns a tuple of (shutdown_sender, capture_receiver) where:
     /// - shutdown_sender: Send () to stop capturing and get results
     /// - capture_receiver: Receives the NetworkCapture when shutdown is triggered
-    pub async fn capture_traffic(&self) -> Result<(oneshot::Sender<()>, oneshot::Receiver<NetworkCapture>)> {
+    pub async fn capture_traffic(
+        &self,
+    ) -> Result<(oneshot::Sender<()>, oneshot::Receiver<NetworkCapture>)> {
         tracing::info!(
             "CDP session: connecting to Chrome on port {}",
             self.debugging_port
@@ -40,7 +45,7 @@ impl CdpSession {
                     Ok(result) => {
                         tracing::info!("CDP connection established");
                         break result;
-                    },
+                    }
                     Err(e) => {
                         retries -= 1;
                         if retries == 0 {
@@ -49,7 +54,10 @@ impl CdpSession {
                                 e
                             )));
                         }
-                        tracing::info!("CDP connection attempt failed, retrying... ({} left)", retries);
+                        tracing::info!(
+                            "CDP connection attempt failed, retrying... ({} left)",
+                            retries
+                        );
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
                 }
