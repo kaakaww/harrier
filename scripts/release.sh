@@ -1,310 +1,134 @@
 #!/usr/bin/env bash
 #
 # Release wizard for Harrier
+# Creates a version bump commit and git tag for automated releases
 #
-# Interactive script to prepare and tag a new release.
-# Run with: make release
 
-# Note: NOT using 'set -e' because it interferes with read error handling
-# We handle errors explicitly where needed
+set -euo pipefail
 
-# Handle Ctrl+C gracefully
-trap 'echo -e "\n\nRelease cancelled by user."; exit 130' INT TERM
-
-# Colors for output
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
 BOLD='\033[1m'
+NC='\033[0m'
 
-# Unicode symbols
+# Symbols
 CHECK="✓"
 CROSS="✗"
-ROCKET="🚀"
-MEMO="📝"
-WARNING="⚠️"
-PACKAGE="📦"
 
-# Helper functions
-print_header() {
-    echo -e "\n${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BOLD}${BLUE}$1${NC}"
-    echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-}
+# Print colored messages
+info() { echo -e "${CYAN}$1${NC}"; }
+success() { echo -e "${GREEN}${CHECK}${NC} $1"; }
+error() { echo -e "${RED}${CROSS}${NC} $1"; exit 1; }
+warn() { echo -e "${YELLOW}⚠${NC}  $1"; }
 
-print_success() {
-    echo -e "${GREEN}${CHECK}${NC} $1"
-}
+# Check we're in the right directory
+[[ -f "Cargo.toml" ]] || error "Not in project root (no Cargo.toml found)"
+grep -q '\[workspace\]' Cargo.toml || error "Not a workspace project"
 
-print_error() {
-    echo -e "${RED}${CROSS}${NC} $1"
-}
+# Get current version
+CURRENT_VERSION=$(grep -m1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
 
-print_warning() {
-    echo -e "${YELLOW}${WARNING}${NC}  $1"
-}
+echo ""
+echo -e "${BOLD}${BLUE}🚀 Harrier Release Wizard${NC}"
+echo ""
+echo -e "${BOLD}Current version:${NC} ${GREEN}${CURRENT_VERSION}${NC}"
+echo ""
 
-print_info() {
-    echo -e "${CYAN}$1${NC}"
-}
+# Ask for version bump type
+echo "What type of release?"
+echo "  1) Major (1.0.0)"
+echo "  2) Minor (0.2.0)"
+echo "  3) Patch (0.1.1)"
+echo "  4) Custom"
+echo ""
+read -rp "Choice [1-4]: " choice
 
-confirm() {
-    local prompt="$1"
-    local default="${2:-n}"
+# Calculate new version
+IFS='.' read -r major minor patch <<< "${CURRENT_VERSION%-*}"
+case "$choice" in
+    1) NEW_VERSION="$((major + 1)).0.0" ;;
+    2) NEW_VERSION="${major}.$((minor + 1)).0" ;;
+    3) NEW_VERSION="${major}.${minor}.$((patch + 1))" ;;
+    4) read -rp "Enter version (e.g., 1.0.0-rc1): " NEW_VERSION ;;
+    *) error "Invalid choice" ;;
+esac
 
-    if [ "$default" = "y" ]; then
-        prompt="$prompt [Y/n]: "
-    else
-        prompt="$prompt [y/N]: "
-    fi
+[[ -n "$NEW_VERSION" ]] || error "No version specified"
 
-    read -r -p "$prompt" response
-    if [ $? -ne 0 ]; then
-        echo -e "\n\nRelease cancelled."
-        exit 130
-    fi
-    response=${response:-$default}
+echo ""
+echo -e "${BOLD}New version:${NC} ${GREEN}${NEW_VERSION}${NC}"
+echo ""
 
-    [[ "$response" =~ ^[Yy]$ ]]
-}
+# Show recent commits
+info "Recent commits:"
+echo ""
+git log --oneline --no-merges -10
+echo ""
 
-# Get current version from Cargo.toml
-get_current_version() {
-    grep -m1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/'
-}
+# Pre-flight checks
+info "Running pre-flight checks..."
 
-# Validate semver format
-validate_semver() {
-    local version="$1"
-    if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
-        return 1
-    fi
-    return 0
-}
+# Check git status
+[[ -z $(git status --porcelain) ]] || error "Working directory has uncommitted changes"
+success "Working directory clean"
 
-# Calculate next version
-calculate_next_version() {
-    local current="$1"
-    local bump_type="$2"
+# Check we're on main
+BRANCH=$(git branch --show-current)
+if [[ "$BRANCH" != "main" ]]; then
+    warn "Not on main branch (on: $BRANCH)"
+    read -rp "Continue anyway? [y/N]: " confirm
+    [[ "$confirm" =~ ^[Yy]$ ]] || exit 0
+else
+    success "On main branch"
+fi
 
-    # Parse current version
-    IFS='.' read -r major minor patch <<< "$current"
-    patch="${patch%%-*}"  # Remove any pre-release suffix
+# Check tests
+info "Running tests..."
+if cargo test --quiet --all 2>&1 > /dev/null; then
+    success "Tests passing"
+else
+    warn "Tests failed"
+    read -rp "Continue anyway? [y/N]: " confirm
+    [[ "$confirm" =~ ^[Yy]$ ]] || exit 0
+fi
 
-    case "$bump_type" in
-        major)
-            echo "$((major + 1)).0.0"
-            ;;
-        minor)
-            echo "${major}.$((minor + 1)).0"
-            ;;
-        patch)
-            echo "${major}.${minor}.$((patch + 1))"
-            ;;
-    esac
-}
+# Final confirmation
+echo ""
+echo -e "${BOLD}Ready to release:${NC}"
+echo "  Version: ${CURRENT_VERSION} → ${GREEN}${NEW_VERSION}${NC}"
+echo "  Tag:     ${CYAN}v${NEW_VERSION}${NC}"
+echo ""
+read -rp "Continue? [y/N]: " confirm
+[[ "$confirm" =~ ^[Yy]$ ]] || { echo "Cancelled."; exit 0; }
 
-# Main script
-main() {
-    echo -e "\n${ROCKET} ${BOLD}${CYAN}Harrier Release Wizard${NC}"
-    print_header ""
+# Update version
+info "Updating Cargo.toml..."
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' "s/^version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
+else
+    sed -i "s/^version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
+fi
 
-    # Check if we're in the right directory
-    if [ ! -f "Cargo.toml" ] || ! grep -q '\[workspace\]' Cargo.toml; then
-        print_error "Not in Harrier project root directory"
-        exit 1
-    fi
+# Verify it worked
+cargo check --quiet || error "Cargo check failed after version update"
+success "Updated version"
 
-    # Get current version
-    CURRENT_VERSION=$(get_current_version)
-    echo -e "${BOLD}Current version:${NC} ${GREEN}${CURRENT_VERSION}${NC}\n"
+# Commit and tag
+git add Cargo.toml Cargo.lock
+git commit -m "Bump version to ${NEW_VERSION}"
+git tag -a "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
+success "Created commit and tag"
 
-    # Ask for release type
-    echo "What type of release?"
-    echo -e "  ${BOLD}1)${NC} Major (breaking changes)"
-    echo -e "  ${BOLD}2)${NC} Minor (new features, backward compatible)"
-    echo -e "  ${BOLD}3)${NC} Patch (bug fixes only)"
-    echo -e "  ${BOLD}4)${NC} Custom version"
-    echo ""
-
-    read -r -p "Selection [1-4]: " release_type
-    if [ $? -ne 0 ]; then
-        echo -e "\n\nRelease cancelled."
-        exit 130
-    fi
-
-    case "$release_type" in
-        1)
-            NEW_VERSION=$(calculate_next_version "$CURRENT_VERSION" "major")
-            ;;
-        2)
-            NEW_VERSION=$(calculate_next_version "$CURRENT_VERSION" "minor")
-            ;;
-        3)
-            NEW_VERSION=$(calculate_next_version "$CURRENT_VERSION" "patch")
-            ;;
-        4)
-            read -r -p "Enter custom version (e.g., 1.0.0-rc1): " NEW_VERSION
-            if [ $? -ne 0 ]; then
-                echo -e "\n\nRelease cancelled."
-                exit 130
-            fi
-            if ! validate_semver "$NEW_VERSION"; then
-                print_error "Invalid semver format"
-                exit 1
-            fi
-            ;;
-        *)
-            print_error "Invalid selection"
-            exit 1
-            ;;
-    esac
-
-    echo -e "\n${BOLD}New version will be:${NC} ${GREEN}${NEW_VERSION}${NC}\n"
-
-    # Show commits since last tag
-    print_header "${MEMO} Commits since last release"
-
-    LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-    if [ -n "$LAST_TAG" ]; then
-        echo -e "${BOLD}Changes since ${LAST_TAG}:${NC}\n"
-        git log --oneline --decorate --no-merges "${LAST_TAG}..HEAD" | head -20
-        COMMIT_COUNT=$(git rev-list --count "${LAST_TAG}..HEAD")
-        if [ "$COMMIT_COUNT" -gt 20 ]; then
-            echo "... and $((COMMIT_COUNT - 20)) more commits"
-        fi
-    else
-        print_warning "No previous tags found"
-        echo -e "\n${BOLD}Recent commits:${NC}\n"
-        git log --oneline --decorate --no-merges HEAD | head -10
-    fi
-
-    # Pre-release checks
-    echo ""
-    print_header "${PACKAGE} Pre-release checks"
-
-    # Check git status
-    if ! git diff-index --quiet HEAD --; then
-        print_error "Working directory has uncommitted changes"
-        git status --short
-        exit 1
-    fi
-    print_success "Working directory is clean"
-
-    # Check branch
-    CURRENT_BRANCH=$(git branch --show-current)
-    if [ "$CURRENT_BRANCH" != "main" ]; then
-        print_warning "Not on main branch (currently on: $CURRENT_BRANCH)"
-        if ! confirm "Continue anyway?"; then
-            exit 0
-        fi
-    else
-        print_success "On main branch"
-    fi
-
-    # Check if up to date with remote
-    git fetch --quiet
-    LOCAL=$(git rev-parse @)
-    REMOTE=$(git rev-parse @{u} 2>/dev/null || echo "")
-
-    if [ -n "$REMOTE" ]; then
-        if [ "$LOCAL" != "$REMOTE" ]; then
-            print_warning "Local branch is not up to date with origin/main"
-            if ! confirm "Continue anyway?"; then
-                exit 0
-            fi
-        else
-            print_success "Up to date with origin/main"
-        fi
-    else
-        print_warning "No upstream branch configured"
-    fi
-
-    # Run tests
-    echo ""
-    print_info "Running tests..."
-    if cargo test --quiet --all > /dev/null 2>&1; then
-        print_success "All tests passing"
-    else
-        print_error "Tests failed"
-        if ! confirm "Continue anyway?"; then
-            exit 0
-        fi
-    fi
-
-    # Show release summary
-    echo ""
-    print_header "📋 Release Summary"
-
-    echo -e "  ${BOLD}Version:${NC}  ${CURRENT_VERSION} → ${GREEN}${NEW_VERSION}${NC}"
-    echo -e "  ${BOLD}Tag:${NC}      ${CYAN}v${NEW_VERSION}${NC}"
-    if [ -n "$LAST_TAG" ]; then
-        echo -e "  ${BOLD}Commits:${NC}  ${COMMIT_COUNT} commits since ${LAST_TAG}"
-    fi
-
-    echo -e "\n${BOLD}The script will:${NC}"
-    echo "  1. Update version in Cargo.toml"
-    echo "  2. Run cargo check to validate"
-    echo "  3. Commit changes"
-    echo "  4. Create annotated git tag v${NEW_VERSION}"
-    echo "  5. Show next steps (push instructions)"
-
-    echo ""
-    if ! confirm "Continue?"; then
-        echo -e "\n${YELLOW}Release cancelled${NC}"
-        exit 0
-    fi
-
-    # Update Cargo.toml version
-    echo ""
-    print_info "Updating Cargo.toml version..."
-
-    # Use sed to update version in Cargo.toml (works on both macOS and Linux)
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
-        sed -i '' "s/^version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
-    else
-        # Linux
-        sed -i "s/^version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
-    fi
-
-    print_success "Updated Cargo.toml version"
-
-    # Validate with cargo check
-    print_info "Running cargo check..."
-    if cargo check --quiet; then
-        print_success "Cargo check passed"
-    else
-        print_error "Cargo check failed"
-        print_warning "Reverting changes..."
-        git checkout Cargo.toml
-        exit 1
-    fi
-
-    # Create commit
-    print_info "Creating commit..."
-    git add Cargo.toml Cargo.lock
-    git commit -m "Bump version to ${NEW_VERSION}"
-    print_success "Created commit"
-
-    # Create tag
-    print_info "Creating git tag..."
-    git tag -a "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
-    print_success "Created tag: v${NEW_VERSION}"
-
-    # Success!
-    echo ""
-    print_header "${GREEN}${CHECK} Release prepared locally!${NC}"
-
-    echo -e "${BOLD}Next steps:${NC}\n"
-    echo -e "  ${CYAN}git push origin main${NC}"
-    echo -e "  ${CYAN}git push origin v${NEW_VERSION}${NC}\n"
-    echo "This will trigger the release workflow and publish binaries."
-    echo ""
-}
-
-# Run main function
-main "$@"
+echo ""
+echo -e "${GREEN}${BOLD}✓ Release prepared!${NC}"
+echo ""
+echo "Next steps:"
+echo "  ${CYAN}git push origin main${NC}"
+echo "  ${CYAN}git push origin v${NEW_VERSION}${NC}"
+echo ""
+echo "This will trigger the release workflow and publish binaries."
+echo ""
