@@ -38,6 +38,7 @@ jobs:
 
   test-linux:
     name: Test (Linux - Full Suite)
+    needs: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +57,7 @@ jobs:
 
   test-macos:
     name: Test (macOS - Platform Specific)
+    needs: lint
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -80,6 +82,7 @@ jobs:
 
   test-windows:
     name: Test (Windows - Platform Specific)
+    needs: lint
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
