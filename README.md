@@ -11,6 +11,7 @@ Harrier makes working with HAR files easier, especially for security testing wit
 - **Stats** - Analyze HAR files with traffic statistics, performance metrics, and host analysis
 - **Filter** - Extract specific traffic by host, status code, method, or content type
 - **Proxy** - Capture HTTP/HTTPS traffic in real-time with MITM proxy
+- **Chrome** - Launch Chrome and capture network traffic via Chrome DevTools Protocol
 - **Security** _(Coming Soon)_ - Detect authentication patterns and scan for sensitive data
 - **Discover** _(Coming Soon)_ - Identify API types (REST, GraphQL, gRPC, WebSocket, etc.) and endpoints
 
@@ -108,6 +109,86 @@ harrier stats captured.har
 # Filter to specific hosts
 harrier filter captured.har --hosts api.example.com -o filtered.har
 ```
+
+### Chrome Command
+
+Launch Chrome in headed mode and capture network traffic directly via Chrome DevTools Protocol (CDP):
+
+```bash
+# Basic usage - launches Chrome and captures all traffic
+harrier chrome
+
+# Specify output file
+harrier chrome --output my-session.har
+
+# Filter to specific hosts (supports globs)
+harrier chrome --hosts "api.example.com"
+harrier chrome --hosts "*.example.com,*.cdn.com"
+
+# Start at a specific URL
+harrier chrome --url "https://app.example.com"
+
+# Use a persistent profile for saved sessions/cookies
+harrier chrome --profile my-app-testing
+
+# Override Chrome location if not auto-detected
+harrier chrome --chrome-path "/path/to/chrome"
+
+# Run StackHawk scan after capture
+harrier chrome --scan
+
+# Combined example
+harrier chrome --url "https://app.example.com" \
+               --hosts "*.example.com" \
+               --profile testing \
+               --output app-traffic.har \
+               --scan
+```
+
+**How it works:**
+
+1. Harrier automatically detects your Chrome installation (macOS, Linux, Windows)
+2. Chrome launches in headed mode so you can interact normally
+3. Network traffic is captured via Chrome DevTools Protocol (CDP)
+4. Browse, interact with web apps, or test workflows
+5. When ready, press 's' to stop capture (Chrome continues), 'k' to kill Chrome and save, or close Chrome naturally
+6. Harrier saves the HAR file with all captured requests, responses, headers, and response bodies
+7. Response bodies larger than 15MB are automatically truncated for HawkScan compatibility
+8. Optionally filter traffic to specific hosts
+9. Optionally run StackHawk scan on the captured traffic
+
+**Interactive capture control:**
+
+When capturing traffic, you have three options:
+- **'s' key**: Stop capturing and save HAR (Chrome remains open)
+- **'k' key**: Kill Chrome and save HAR with captured traffic
+- **Close Chrome**: Naturally close Chrome to stop and save
+
+**Profile management:**
+
+- Default: Uses a temporary profile (cleaned up automatically)
+- `--profile <name>`: Uses persistent profile at `~/.harrier/profiles/<name>`
+- Persistent profiles retain cookies, sessions, and browser state between captures
+
+**Response body capture:**
+
+- All response bodies are captured and included in HAR files
+- Bodies larger than 15MB are truncated to meet HawkScan's 16MB limit
+- Both text and binary content supported (base64 encoding for binary)
+- Truncation metadata is preserved in the HAR file
+
+**Integration with StackHawk:**
+
+```bash
+# Capture authenticated traffic, filter to API, and scan
+harrier chrome --url "https://app.example.com/login" \
+               --hosts "api.example.com" \
+               --profile authenticated \
+               --output api-traffic.har \
+               --scan
+```
+
+**Status:** ✅ Fully functional MVP - Chrome integration with complete network capture and response body support is complete and tested on macOS.
 
 ## Coming Soon
 

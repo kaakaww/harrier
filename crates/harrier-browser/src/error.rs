@@ -12,4 +12,10 @@ pub enum Error {
     Io(#[from] std::io::Error),
 }
 
+impl From<chromiumoxide::error::CdpError> for Error {
+    fn from(err: chromiumoxide::error::CdpError) -> Self {
+        Error::Cdp(err.to_string())
+    }
+}
+
 pub type Result<T> = std::result::Result<T, Error>;

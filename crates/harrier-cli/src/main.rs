@@ -132,6 +132,33 @@ enum Commands {
         #[arg(long)]
         key: Option<PathBuf>,
     },
+
+    /// Launch Chrome and capture HAR traffic
+    Chrome {
+        /// Output HAR file
+        #[arg(short, long, default_value = "chrome-capture.har")]
+        output: PathBuf,
+
+        /// Filter to specific hosts (supports globs, repeatable)
+        #[arg(long)]
+        hosts: Vec<String>,
+
+        /// Run hawk scan after capture
+        #[arg(long)]
+        scan: bool,
+
+        /// Override Chrome binary location
+        #[arg(long)]
+        chrome_path: Option<PathBuf>,
+
+        /// Starting URL to navigate to
+        #[arg(long)]
+        url: Option<String>,
+
+        /// Use persistent profile at ~/.harrier/profiles/<NAME>
+        #[arg(long)]
+        profile: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -181,6 +208,14 @@ fn main() -> Result<()> {
             cert,
             key,
         } => commands::proxy::execute(port, &output, cert.as_deref(), key.as_deref()),
+        Commands::Chrome {
+            output,
+            hosts,
+            scan,
+            chrome_path,
+            url,
+            profile,
+        } => commands::chrome::execute(&output, hosts, scan, chrome_path, url, profile),
     }
 }
 

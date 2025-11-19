@@ -2,7 +2,7 @@
 
 This document tracks key technical decisions made during development and the reasoning behind them.
 
-## 2025-01-08: Initial Setup
+## 2025-11-08: Initial Setup
 
 ### Workspace Structure
 **Decision:** Use a Cargo workspace with 5 separate crates instead of a monolithic structure.

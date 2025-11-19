@@ -1,3 +1,4 @@
+pub mod chrome;
 pub mod discover;
 pub mod filter;
 pub mod proxy;

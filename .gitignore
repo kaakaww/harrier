@@ -42,6 +42,7 @@ test-output/
 fixtures/*.generated.har
 samples/
 captured.har
+chrome-capture.har
 
 # Build artifacts
 *.exe

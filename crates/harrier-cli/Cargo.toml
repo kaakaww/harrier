@@ -16,6 +16,7 @@ path = "src/main.rs"
 harrier-core = { workspace = true }
 harrier-detectors = { workspace = true }
 harrier-proxy = { workspace = true }
+harrier-browser = { workspace = true }
 
 # Async
 tokio = { workspace = true }
@@ -42,5 +43,11 @@ url = { workspace = true }
 # Domain parsing
 psl = { workspace = true }
 
+# System utilities
+dirs = { workspace = true }
+which = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
+assert_cmd = "2.0"
+predicates = "3.0"
