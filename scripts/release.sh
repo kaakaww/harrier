@@ -60,7 +60,10 @@ confirm() {
         prompt="$prompt [y/N]: "
     fi
 
-    read -p "$(echo -e ${prompt})" response
+    read -p "$(echo -e ${prompt})" response || {
+        echo -e "\n\nRelease cancelled."
+        exit 130
+    }
     response=${response:-$default}
 
     [[ "$response" =~ ^[Yy]$ ]]
@@ -125,7 +128,10 @@ main() {
     echo "  ${BOLD}4)${NC} Custom version"
     echo ""
 
-    read -p "Selection [1-4]: " release_type
+    read -p "Selection [1-4]: " release_type || {
+        echo -e "\n\nRelease cancelled."
+        exit 130
+    }
 
     case "$release_type" in
         1)
@@ -138,7 +144,10 @@ main() {
             NEW_VERSION=$(calculate_next_version "$CURRENT_VERSION" "patch")
             ;;
         4)
-            read -p "Enter custom version (e.g., 1.0.0-rc1): " NEW_VERSION
+            read -p "Enter custom version (e.g., 1.0.0-rc1): " NEW_VERSION || {
+                echo -e "\n\nRelease cancelled."
+                exit 130
+            }
             if ! validate_semver "$NEW_VERSION"; then
                 print_error "Invalid semver format"
                 exit 1
