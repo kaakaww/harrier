@@ -105,7 +105,7 @@ main() {
     print_header ""
 
     # Check if we're in the right directory
-    if [ ! -f "Cargo.toml" ] || ! grep -q 'name = "harrier"' Cargo.toml; then
+    if [ ! -f "Cargo.toml" ] || ! grep -q '\[workspace\]' Cargo.toml; then
         print_error "Not in Harrier project root directory"
         exit 1
     fi
