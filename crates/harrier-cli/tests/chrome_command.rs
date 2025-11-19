@@ -1,9 +1,15 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
+use std::path::PathBuf;
+
+#[allow(deprecated)]
+fn get_harrier_bin() -> PathBuf {
+    assert_cmd::cargo::cargo_bin("harrier")
+}
 
 #[test]
 fn test_chrome_command_help() {
-    let mut cmd = Command::cargo_bin("harrier").expect("failed to find harrier binary");
+    let mut cmd = Command::new(get_harrier_bin());
     cmd.arg("chrome").arg("--help");
 
     cmd.assert()
@@ -21,7 +27,7 @@ fn test_chrome_command_help() {
 fn test_chrome_command_without_chrome() {
     // This test will fail if Chrome is actually installed
     // Skip if Chrome exists at default paths
-    let chrome_paths = vec![
+    let chrome_paths = [
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
         "/usr/bin/google-chrome",
         "/usr/bin/chromium",
@@ -35,7 +41,7 @@ fn test_chrome_command_without_chrome() {
         return;
     }
 
-    let mut cmd = Command::cargo_bin("harrier").expect("failed to find harrier binary");
+    let mut cmd = Command::new(get_harrier_bin());
     cmd.arg("chrome")
         .arg("--chrome-path")
         .arg("/nonexistent/chrome");
@@ -47,7 +53,7 @@ fn test_chrome_command_without_chrome() {
 
 #[test]
 fn test_chrome_command_output_flag() {
-    let mut cmd = Command::cargo_bin("harrier").expect("failed to find harrier binary");
+    let mut cmd = Command::new(get_harrier_bin());
     cmd.arg("chrome")
         .arg("--output")
         .arg("custom-output.har")

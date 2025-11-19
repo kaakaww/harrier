@@ -210,19 +210,84 @@ _Backend infrastructure for these features exists in the `harrier-detectors` cra
 
 ## Development
 
+### Building and Testing
+
 ```bash
-# Build
+# Build (debug mode)
+make build
+cargo build
+
+# Build (release mode)
+make release-build
 cargo build --release
 
-# Run tests
-cargo test
+# Run all tests
+make test
+cargo test --all
 
-# Run linter
-cargo clippy
+# Run linting (clippy + rustfmt)
+make lint
+cargo clippy --all-targets --all-features -- -D warnings
+cargo fmt -- --check
 
 # Format code
 cargo fmt
+
+# Clean build artifacts
+make clean
+cargo clean
+
+# Install locally
+make install
+cargo install --path .
 ```
+
+### Releasing
+
+Harrier uses an interactive release wizard to simplify the release process:
+
+```bash
+# Run the release wizard
+make release
+```
+
+The wizard will:
+1. Detect the current version
+2. Prompt for release type (major/minor/patch/custom)
+3. Show commits since last release
+4. Run pre-release checks (tests, git status, etc.)
+5. Update version in `Cargo.toml`
+6. Create a git commit and tag
+7. Show push instructions
+
+After the wizard completes, push to trigger the release:
+
+```bash
+git push origin main
+git push origin v1.0.0  # Replace with your version
+```
+
+This automatically triggers a GitHub Actions workflow that:
+- Builds binaries for 6 platforms (macOS Intel/ARM, Windows x64/ARM, Linux x64/ARM)
+- Creates a GitHub Release with all binaries attached
+- Generates release notes from commits
+
+### CI/CD
+
+The project uses GitHub Actions for continuous integration and release automation:
+
+**CI Workflow** (`.github/workflows/ci.yml`):
+- **Lint** - Code formatting and clippy checks (ubuntu)
+- **Test (Linux)** - Full test suite on Linux (ubuntu)
+- **Test (macOS)** - Platform-specific tests only (macos)
+- **Test (Windows)** - Platform-specific tests only (windows)
+
+All jobs run in parallel for speed, with automatic cancellation on failure to save costs.
+
+**Release Workflow** (`.github/workflows/release.yml`):
+- Triggered by git tags matching `v*.*.*`
+- Builds release binaries for 6 platforms in parallel
+- Publishes to GitHub Releases with auto-generated notes
 
 ## About HAR Files
 
