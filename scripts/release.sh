@@ -5,7 +5,8 @@
 # Interactive script to prepare and tag a new release.
 # Run with: make release
 
-set -e
+# Note: NOT using 'set -e' because it interferes with read error handling
+# We handle errors explicitly where needed
 
 # Handle Ctrl+C gracefully
 trap 'echo -e "\n\nRelease cancelled by user."; exit 130' INT TERM
@@ -222,7 +223,7 @@ main() {
     # Run tests
     echo ""
     print_info "Running tests..."
-    if cargo test --quiet --all 2>&1 | grep -q "test result:"; then
+    if cargo test --quiet --all > /dev/null 2>&1; then
         print_success "All tests passing"
     else
         print_error "Tests failed"
