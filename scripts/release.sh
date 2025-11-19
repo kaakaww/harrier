@@ -7,6 +7,9 @@
 
 set -e
 
+# Handle Ctrl+C gracefully
+trap 'echo -e "\n\nRelease cancelled by user."; exit 130' INT TERM
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
