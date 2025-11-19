@@ -25,5 +25,6 @@ clean: ## Clean build artifacts
 install: ## Install harrier locally
 	cargo install --path .
 
-release: ## Run interactive release wizard
+release: ## Run interactive release wizard (or run ./scripts/release.sh directly)
+	@echo "Note: For better Ctrl+C handling, run directly: ./scripts/release.sh"
 	@./scripts/release.sh
