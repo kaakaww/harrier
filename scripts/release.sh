@@ -123,10 +123,10 @@ main() {
 
     # Ask for release type
     echo "What type of release?"
-    echo "  ${BOLD}1)${NC} Major (breaking changes)"
-    echo "  ${BOLD}2)${NC} Minor (new features, backward compatible)"
-    echo "  ${BOLD}3)${NC} Patch (bug fixes only)"
-    echo "  ${BOLD}4)${NC} Custom version"
+    echo -e "  ${BOLD}1)${NC} Major (breaking changes)"
+    echo -e "  ${BOLD}2)${NC} Minor (new features, backward compatible)"
+    echo -e "  ${BOLD}3)${NC} Patch (bug fixes only)"
+    echo -e "  ${BOLD}4)${NC} Custom version"
     echo ""
 
     read -p "Selection [1-4]: " release_type || {
