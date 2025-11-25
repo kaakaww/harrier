@@ -4,9 +4,10 @@ use crate::{
 };
 use chromiumoxide::browser::Browser;
 use chromiumoxide::cdp::browser_protocol::network::{
-    EnableParams, EventLoadingFinished, EventRequestWillBeSent, EventResponseReceived,
-    GetResponseBodyParams,
+    ClearBrowserCacheParams, EnableParams, EventLoadingFinished, EventRequestWillBeSent,
+    EventResponseReceived, GetResponseBodyParams,
 };
+use chromiumoxide::cdp::browser_protocol::page::{EventLoadEventFired, NavigateParams};
 use futures::StreamExt;
 use std::collections::HashMap;
 use tokio::sync::oneshot;
@@ -22,6 +23,152 @@ impl CdpSession {
         Self { debugging_port }
     }
 
+    /// Connect to Chrome and return the browser instance
+    async fn connect(&self) -> Result<(Browser, chromiumoxide::handler::Handler)> {
+        let ws_url = format!("http://localhost:{}", self.debugging_port);
+        let mut retries = 20;
+
+        loop {
+            tracing::debug!("Attempting CDP connection to {}...", ws_url);
+            match Browser::connect(&ws_url).await {
+                Ok(result) => {
+                    tracing::info!("CDP connection established");
+                    return Ok(result);
+                }
+                Err(e) => {
+                    retries -= 1;
+                    if retries == 0 {
+                        return Err(crate::Error::Cdp(format!(
+                            "Failed to connect to Chrome after 10 seconds (20 attempts): {}",
+                            e
+                        )));
+                    }
+                    tracing::info!(
+                        "CDP connection attempt failed, retrying... ({} left)",
+                        retries
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                }
+            }
+        }
+    }
+
+    /// Clear Chrome's browser cache
+    pub async fn clear_browser_cache(&self) -> Result<()> {
+        tracing::info!("Clearing browser cache...");
+
+        let (browser, mut handler) = self.connect().await?;
+
+        // Spawn handler task
+        let handler_task = tokio::spawn(async move {
+            while let Some(event) = handler.next().await {
+                if let Err(e) = event {
+                    tracing::debug!("CDP handler event error (continuing): {}", e);
+                }
+            }
+        });
+
+        // Wait for Chrome to be ready
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+        // Get page
+        let page = if let Some(page) = browser.pages().await?.first() {
+            page.clone()
+        } else {
+            browser.new_page("about:blank").await?
+        };
+
+        // Clear cache
+        match page.execute(ClearBrowserCacheParams::default()).await {
+            Ok(_) => {
+                tracing::info!("Browser cache cleared successfully");
+                handler_task.abort();
+                Ok(())
+            }
+            Err(e) => {
+                handler_task.abort();
+                Err(crate::Error::Cdp(format!(
+                    "Failed to clear browser cache: {}",
+                    e
+                )))
+            }
+        }
+    }
+
+    /// Navigate to a URL
+    pub async fn navigate_to(&self, url: &str) -> Result<()> {
+        tracing::info!("Navigating to {}...", url);
+
+        // Validate and normalize URL
+        let normalized_url = if url.starts_with("http://") || url.starts_with("https://") {
+            url.to_string()
+        } else {
+            format!("https://{}", url)
+        };
+
+        let (browser, mut handler) = self.connect().await?;
+
+        // Spawn handler task
+        let handler_task = tokio::spawn(async move {
+            while let Some(event) = handler.next().await {
+                if let Err(e) = event {
+                    tracing::debug!("CDP handler event error (continuing): {}", e);
+                }
+            }
+        });
+
+        // Wait for Chrome to be ready
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+        // Get page
+        let page = if let Some(page) = browser.pages().await?.first() {
+            page.clone()
+        } else {
+            browser.new_page("about:blank").await?
+        };
+
+        // Subscribe to load event
+        let mut load_events = page.event_listener::<EventLoadEventFired>().await?;
+
+        // Navigate
+        let navigate_params = NavigateParams::builder()
+            .url(normalized_url.clone())
+            .build()
+            .map_err(|e| crate::Error::Cdp(format!("Failed to build navigate params: {}", e)))?;
+
+        match page.execute(navigate_params).await {
+            Ok(_) => {
+                tracing::info!("Navigation initiated to {}", normalized_url);
+
+                // Wait for page load with timeout
+                let timeout = tokio::time::sleep(std::time::Duration::from_secs(30));
+                tokio::pin!(timeout);
+
+                tokio::select! {
+                    _ = load_events.next() => {
+                        tracing::info!("Page loaded successfully");
+                        handler_task.abort();
+                        Ok(())
+                    }
+                    _ = &mut timeout => {
+                        handler_task.abort();
+                        Err(crate::Error::Cdp(format!(
+                            "Navigation timeout after 30 seconds for {}",
+                            normalized_url
+                        )))
+                    }
+                }
+            }
+            Err(e) => {
+                handler_task.abort();
+                Err(crate::Error::Cdp(format!(
+                    "Failed to navigate to {}: {}",
+                    normalized_url, e
+                )))
+            }
+        }
+    }
+
     /// Connect to Chrome and capture network traffic
     ///
     /// Returns a tuple of (shutdown_sender, capture_receiver) where:
@@ -35,34 +182,8 @@ impl CdpSession {
             self.debugging_port
         );
 
-        // Connect to Chrome via CDP with retries (Chrome may not be fully ready)
-        let ws_url = format!("http://localhost:{}", self.debugging_port);
-        let (browser, mut handler) = {
-            let mut retries = 5;
-            loop {
-                tracing::debug!("Attempting CDP connection to {}...", ws_url);
-                match Browser::connect(&ws_url).await {
-                    Ok(result) => {
-                        tracing::info!("CDP connection established");
-                        break result;
-                    }
-                    Err(e) => {
-                        retries -= 1;
-                        if retries == 0 {
-                            return Err(crate::Error::Cdp(format!(
-                                "Failed to connect to Chrome after 5 attempts: {}",
-                                e
-                            )));
-                        }
-                        tracing::info!(
-                            "CDP connection attempt failed, retrying... ({} left)",
-                            retries
-                        );
-                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    }
-                }
-            }
-        };
+        // Connect to Chrome via CDP
+        let (browser, mut handler) = self.connect().await?;
 
         // Spawn handler task IMMEDIATELY to process CDP protocol messages
         // This must run for browser.pages() and other commands to work
