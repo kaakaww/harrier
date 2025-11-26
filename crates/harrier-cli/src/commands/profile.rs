@@ -1,3 +1,28 @@
+//! Profile management commands for Chrome profiles.
+//!
+//! This module provides CLI commands for managing Chrome profiles used by the `chrome` command.
+//! Profiles store browser state (cookies, extensions, settings) and can be:
+//! - Listed to see all available profiles
+//! - Inspected for detailed information (size, extensions, cookies)
+//! - Deleted to reclaim disk space
+//! - Cleaned to remove cache while preserving other data
+//!
+//! # Examples
+//!
+//! ```bash
+//! # List all profiles
+//! harrier profile list
+//!
+//! # Show profile details
+//! harrier profile info default
+//!
+//! # Delete a profile
+//! harrier profile delete old-profile
+//!
+//! # Clean cache from all profiles
+//! harrier profile clean
+//! ```
+
 use anyhow::{Result, anyhow};
 use harrier_browser::ProfileManager;
 use std::fs;
@@ -45,17 +70,35 @@ pub fn list() -> Result<()> {
     println!("Available profiles:");
     println!();
 
+    const SIZE_WARNING_THRESHOLD: u64 = 1_073_741_824; // 1GB
+    let mut has_warnings = false;
+
     for (name, path, size) in profiles {
         let is_default = name == "default";
         let marker = if is_default { "* " } else { "  " };
         let size_mb = size as f64 / 1_048_576.0;
 
+        let warning = if size > SIZE_WARNING_THRESHOLD {
+            has_warnings = true;
+            " ⚠️  Large"
+        } else {
+            ""
+        };
+
         println!(
-            "{}{:<20} {:>8.1} MB    {}",
+            "{}{:<20} {:>8.1} MB    {}{}",
             marker,
             name,
             size_mb,
-            path.display()
+            path.display(),
+            warning
+        );
+    }
+
+    if has_warnings {
+        println!();
+        println!(
+            "⚠️  Some profiles exceed 1GB. Consider using 'harrier profile clean' to reclaim space."
         );
     }
 

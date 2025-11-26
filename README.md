@@ -115,7 +115,7 @@ harrier filter captured.har --hosts api.example.com -o filtered.har
 Launch Chrome in headed mode and capture network traffic directly via Chrome DevTools Protocol (CDP):
 
 ```bash
-# Basic usage - launches Chrome and captures all traffic
+# Basic usage - uses persistent default profile
 harrier chrome
 
 # Specify output file
@@ -125,11 +125,14 @@ harrier chrome --output my-session.har
 harrier chrome --hosts "api.example.com"
 harrier chrome --hosts "*.example.com,*.cdn.com"
 
-# Start at a specific URL
+# Start at a specific URL (cache cleared, then navigates)
 harrier chrome --url "https://app.example.com"
 
-# Use a persistent profile for saved sessions/cookies
+# Use a named persistent profile for saved sessions/cookies/extensions
 harrier chrome --profile my-app-testing
+
+# Use a temporary profile (auto-deleted after use)
+harrier chrome --temp
 
 # Override Chrome location if not auto-detected
 harrier chrome --chrome-path "/path/to/chrome"
@@ -144,6 +147,12 @@ harrier chrome --url "https://app.example.com" \
                --output app-traffic.har \
                --scan
 ```
+
+**Profile Behavior:**
+- **Default:** Uses persistent profile at `~/.harrier/profiles/default` (retains logins, extensions, cookies)
+- **Named (`--profile <name>`):** Uses persistent profile at `~/.harrier/profiles/<name>`
+- **Temporary (`--temp`):** Creates ephemeral profile that auto-deletes after Chrome closes
+- **Cache:** Browser cache is cleared on every run via CDP, but cookies/auth persist
 
 **How it works:**
 
@@ -164,11 +173,36 @@ When capturing traffic, you have three options:
 - **'k' key**: Kill Chrome and save HAR with captured traffic
 - **Close Chrome**: Naturally close Chrome to stop and save
 
-**Profile management:**
+### Profile Management
 
-- Default: Uses a temporary profile (cleaned up automatically)
-- `--profile <name>`: Uses persistent profile at `~/.harrier/profiles/<name>`
-- Persistent profiles retain cookies, sessions, and browser state between captures
+Manage Chrome profiles used for HAR capture:
+
+```bash
+# List all profiles with sizes
+harrier profile list
+
+# Show detailed information about a profile
+harrier profile info default
+harrier profile info my-app-testing
+
+# Delete a profile (requires confirmation)
+harrier profile delete old-profile
+
+# Delete default profile (requires --force)
+harrier profile delete default --force
+
+# Clear cache from all profiles (preserves cookies, extensions, etc.)
+harrier profile clean
+
+# Clear cache from specific profile
+harrier profile clean --profile my-app-testing
+```
+
+**Why use profiles?**
+- **Testing with authentication**: Login once, reuse credentials across captures
+- **Extension testing**: Install extensions in a profile, test with them enabled
+- **Isolating environments**: Separate profiles for dev, staging, production testing
+- **Clean slate testing**: Use `--temp` for reproducible, stateless captures
 
 **Response body capture:**
 

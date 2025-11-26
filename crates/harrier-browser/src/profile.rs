@@ -1,3 +1,39 @@
+//! Chrome profile management for HAR capture.
+//!
+//! This module provides functionality for managing Chrome user profiles, which persist
+//! browser state (cookies, extensions, settings) across HAR capture sessions.
+//!
+//! # Profile Types
+//!
+//! - **Temporary**: Auto-deleted after use. Created in temp directory.
+//! - **Persistent**: Stored in `~/.harrier/profiles/<name>`. Survives across sessions.
+//! - **Default**: Special persistent profile at `~/.harrier/profiles/default`.
+//!
+//! # Cache Management
+//!
+//! Profiles retain all browser data except cache, which is cleared on every `chrome` command
+//! run via CDP. This ensures:
+//! - Fresh network requests that appear in HAR files
+//! - Preserved authentication and session state
+//! - Consistent capture behavior
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use harrier_browser::ProfileManager;
+//!
+//! // Create a temporary profile
+//! let temp = ProfileManager::temporary()?;
+//! // Profile deleted when `temp` is dropped
+//!
+//! // Create a persistent profile
+//! let persistent = ProfileManager::persistent("/path/to/profile".into())?;
+//!
+//! // Use the default profile
+//! let default = ProfileManager::default_profile()?;
+//! # Ok::<(), harrier_browser::Error>(())
+//! ```
+
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
 
@@ -56,7 +92,21 @@ impl ProfileManager {
     /// Create or use the default persistent profile
     pub fn default_profile() -> Result<Self> {
         let default_path = Self::get_default_profile_path()?;
-        Self::persistent(default_path)
+        let is_new = !default_path.exists();
+
+        let profile = Self::persistent(default_path.clone())?;
+
+        if is_new {
+            eprintln!("📁 Created default profile at {}", default_path.display());
+            eprintln!(
+                "   This profile will persist between sessions, retaining logins and extensions."
+            );
+            eprintln!(
+                "   Use --temp for temporary profiles or --profile <name> for named profiles."
+            );
+        }
+
+        Ok(profile)
     }
 
     /// Get the path to the default profile directory
