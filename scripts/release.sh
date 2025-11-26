@@ -99,8 +99,8 @@ fi
 # Final confirmation
 echo ""
 echo -e "${BOLD}Ready to release:${NC}"
-echo "  Version: ${CURRENT_VERSION} → ${GREEN}${NEW_VERSION}${NC}"
-echo "  Tag:     ${CYAN}v${NEW_VERSION}${NC}"
+echo -e "  Version: ${CURRENT_VERSION} → ${GREEN}${NEW_VERSION}${NC}"
+echo -e "  Tag:     ${CYAN}v${NEW_VERSION}${NC}"
 echo ""
 read -rp "Continue? [y/N]: " confirm
 [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Cancelled."; exit 0; }
