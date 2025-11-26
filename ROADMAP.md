@@ -127,3 +127,10 @@ With the Chrome integration MVP complete, the next priorities are:
 - **Phase 5** (browser integration) remains future work, likely after Phase 4 MVP stabilizes
 - Focus on StackHawk customer use cases: traffic capture, security testing, API discovery
 - Keep CLI fast and composable with other Unix tools
+
+## Wishlist
+
+- Generate OAS from HAR
+- Generate `stackhawk.yml[s]` from HAR
+- Link current repo to StackHawk app
+- Better API/SPA detection
