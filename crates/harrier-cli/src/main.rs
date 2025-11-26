@@ -155,7 +155,46 @@ enum Commands {
         #[arg(long)]
         url: Option<String>,
 
-        /// Use persistent profile at ~/.harrier/profiles/<NAME>
+        /// Use named persistent profile at ~/.harrier/profiles/<NAME>
+        #[arg(long)]
+        profile: Option<String>,
+
+        /// Use temporary profile (auto-deleted after use)
+        #[arg(long)]
+        temp: bool,
+    },
+
+    /// Manage Chrome profiles
+    Profile {
+        #[command(subcommand)]
+        command: ProfileCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum ProfileCommands {
+    /// List all available profiles
+    List,
+
+    /// Show detailed information about a profile
+    Info {
+        /// Profile name
+        name: String,
+    },
+
+    /// Delete a profile
+    Delete {
+        /// Profile name
+        name: String,
+
+        /// Force deletion without confirmation
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Clear cache from profiles
+    Clean {
+        /// Specific profile to clean (cleans all if not specified)
         #[arg(long)]
         profile: Option<String>,
     },
@@ -215,7 +254,14 @@ fn main() -> Result<()> {
             chrome_path,
             url,
             profile,
-        } => commands::chrome::execute(&output, hosts, scan, chrome_path, url, profile),
+            temp,
+        } => commands::chrome::execute(&output, hosts, scan, chrome_path, url, profile, temp),
+        Commands::Profile { command } => match command {
+            ProfileCommands::List => commands::profile::list(),
+            ProfileCommands::Info { name } => commands::profile::info(&name),
+            ProfileCommands::Delete { name, force } => commands::profile::delete(&name, force),
+            ProfileCommands::Clean { profile } => commands::profile::clean(profile.as_deref()),
+        },
     }
 }
 

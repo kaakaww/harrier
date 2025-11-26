@@ -27,6 +27,7 @@ pub fn execute(
     chrome_path: Option<PathBuf>,
     url: Option<String>,
     profile: Option<String>,
+    temp: bool,
 ) -> Result<()> {
     // Create tokio runtime for async operations
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -41,18 +42,27 @@ pub fn execute(
         println!("✅ Found Chrome at: {}", chrome_binary.display());
 
         // Step 2: Setup profile
-        let profile_manager = if let Some(profile_name) = profile {
+        let profile_manager = if temp {
+            // Temporary profile takes precedence
+            if profile.is_some() {
+                eprintln!("⚠️  Both --profile and --temp specified. Using temporary profile.");
+            }
+            println!("📁 Using temporary profile");
+            ProfileManager::temporary()?
+        } else if let Some(profile_name) = profile {
+            // Named persistent profile
             let profile_path = dirs::home_dir()
                 .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?
                 .join(".harrier")
                 .join("profiles")
-                .join(profile_name.clone());
+                .join(&profile_name);
 
-            println!("📁 Using profile: {}", profile_path.display());
+            println!("📁 Using profile: {}", profile_name);
             ProfileManager::persistent(profile_path)?
         } else {
-            println!("📁 Using temporary profile");
-            ProfileManager::temporary()?
+            // Default persistent profile
+            println!("📁 Using profile: default");
+            ProfileManager::default_profile()?
         };
 
         // Step 3: Create launcher (always launches to about:blank)

@@ -23,6 +23,7 @@ serde_json = { workspace = true }
 
 # Utilities
 chrono = { workspace = true }
+dirs = { workspace = true }
 
 # Error handling
 thiserror = { workspace = true }
