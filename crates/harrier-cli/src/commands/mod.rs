@@ -1,4 +1,5 @@
 pub mod chrome;
+pub mod completion;
 pub mod discover;
 pub mod filter;
 pub mod profile;

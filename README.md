@@ -25,6 +25,52 @@ cargo install --path .
 cargo run -- [command] [args]
 ```
 
+## Shell Completions
+
+Harrier supports tab completion for Bash, Zsh, Fish, and PowerShell.
+
+### Setup
+
+For detailed installation instructions for all shells, run:
+```bash
+harrier completion --help
+```
+
+### Quick Installation
+
+**Bash:**
+```bash
+echo 'source <(harrier completion --shell bash)' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**Zsh:**
+```bash
+echo 'source <(harrier completion --shell zsh)' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**Fish:**
+```bash
+harrier completion --shell fish > ~/.config/fish/completions/harrier.fish
+```
+
+**PowerShell:**
+```powershell
+harrier completion --shell powershell >> $PROFILE
+. $PROFILE
+```
+
+### What Gets Completed
+
+- **Commands**: `stats`, `filter`, `security`, `discover`, `proxy`, `chrome`, `profile`, `completion`
+- **Subcommands**: `profile list`, `profile info`, `profile delete`, `profile clean`
+- **Flags**: All command-specific flags and options
+- **File paths**: Intelligent file/directory completion for HAR files and paths
+- **URLs**: Context-aware URL completion for `--url` flags
+- **Hosts**: Hostname completion for `--hosts` flags
+- **Values**: Smart completion hints for HTTP methods, status codes, content types, and profile names
+
 ## Usage
 
 ### Stats Command

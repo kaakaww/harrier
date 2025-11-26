@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Shell Completions**: Tab completion support for Bash, Zsh, Fish, and PowerShell
+  - New `harrier completion --shell <SHELL>` command generates completion scripts
+  - Comprehensive help in `completion --help` shows installation for all shells
+  - Intelligent value hints for file paths, URLs, hostnames, and command-specific values
+  - Simple, `gh`-style interface for ease of use
 - **Profile Management**: New `harrier profile` command with `list`, `info`, `delete`, and `clean` subcommands
 - **Profile Commands**:
   - `profile list` - List all Chrome profiles with sizes

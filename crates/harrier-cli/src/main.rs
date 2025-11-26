@@ -1,5 +1,6 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand, ValueHint};
+use clap_complete::Shell;
 use std::path::PathBuf;
 
 mod commands;
@@ -11,7 +12,7 @@ mod commands;
     about = "CLI tool for working with HTTP Archive (HAR) files",
     long_about = "Harrier analyzes, filters, and modifies HAR files for security testing and API discovery."
 )]
-struct Cli {
+pub struct Cli {
     #[command(subcommand)]
     command: Commands,
 
@@ -29,7 +30,7 @@ enum Commands {
     /// Display HAR file statistics
     Stats {
         /// HAR file to analyze
-        #[arg(value_name = "FILE")]
+        #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         file: PathBuf,
 
         /// Show detailed timing info
@@ -52,34 +53,34 @@ enum Commands {
     /// Filter HAR entries by criteria
     Filter {
         /// HAR file to filter
-        #[arg(value_name = "FILE")]
+        #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         file: PathBuf,
 
         /// Host patterns (exact or glob like *.example.com)
-        #[arg(long)]
+        #[arg(long, value_hint = ValueHint::Hostname)]
         hosts: Vec<String>,
 
         /// Status codes (2xx, 404, 500-599, etc.)
-        #[arg(long)]
+        #[arg(long, value_hint = ValueHint::Other)]
         status: Option<String>,
 
         /// HTTP method (GET, POST, etc.)
-        #[arg(long)]
+        #[arg(long, value_hint = ValueHint::Other)]
         method: Option<String>,
 
         /// Content type pattern
-        #[arg(long)]
+        #[arg(long, value_hint = ValueHint::Other)]
         content_type: Option<String>,
 
         /// Output file (defaults to stdout)
-        #[arg(short, long)]
+        #[arg(short, long, value_hint = ValueHint::FilePath)]
         output: Option<PathBuf>,
     },
 
     /// Perform security analysis
     Security {
         /// HAR file to analyze
-        #[arg(value_name = "FILE")]
+        #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         file: PathBuf,
 
         /// Check authentication patterns
@@ -98,7 +99,7 @@ enum Commands {
     /// Discover APIs and app types
     Discover {
         /// HAR file to analyze
-        #[arg(value_name = "FILE")]
+        #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         file: PathBuf,
 
         /// Show only API endpoints
@@ -110,7 +111,7 @@ enum Commands {
         openapi: bool,
 
         /// Output file for spec
-        #[arg(short, long, requires = "openapi")]
+        #[arg(short, long, requires = "openapi", value_hint = ValueHint::FilePath)]
         output: Option<PathBuf>,
     },
 
@@ -121,26 +122,26 @@ enum Commands {
         port: u16,
 
         /// Output HAR file
-        #[arg(short, long, default_value = "captured.har")]
+        #[arg(short, long, default_value = "captured.har", value_hint = ValueHint::FilePath)]
         output: PathBuf,
 
         /// Certificate path (uses ~/.harrier/ca.crt if not specified)
-        #[arg(long)]
+        #[arg(long, value_hint = ValueHint::FilePath)]
         cert: Option<PathBuf>,
 
         /// Private key path (uses ~/.harrier/ca.key if not specified)
-        #[arg(long)]
+        #[arg(long, value_hint = ValueHint::FilePath)]
         key: Option<PathBuf>,
     },
 
     /// Launch Chrome and capture HAR traffic
     Chrome {
         /// Output HAR file
-        #[arg(short, long, default_value = "chrome-capture.har")]
+        #[arg(short, long, default_value = "chrome-capture.har", value_hint = ValueHint::FilePath)]
         output: PathBuf,
 
         /// Filter to specific hosts (supports globs, repeatable)
-        #[arg(long)]
+        #[arg(long, value_hint = ValueHint::Hostname)]
         hosts: Vec<String>,
 
         /// Run hawk scan after capture
@@ -148,15 +149,15 @@ enum Commands {
         scan: bool,
 
         /// Override Chrome binary location
-        #[arg(long)]
+        #[arg(long, value_hint = ValueHint::FilePath)]
         chrome_path: Option<PathBuf>,
 
         /// Starting URL to navigate to
-        #[arg(long)]
+        #[arg(long, value_hint = ValueHint::Url)]
         url: Option<String>,
 
         /// Use named persistent profile at ~/.harrier/profiles/<NAME>
-        #[arg(long)]
+        #[arg(long, value_hint = ValueHint::Other)]
         profile: Option<String>,
 
         /// Use temporary profile (auto-deleted after use)
@@ -169,6 +170,34 @@ enum Commands {
         #[command(subcommand)]
         command: ProfileCommands,
     },
+
+    /// Generate shell completion scripts
+    #[command(long_about = "Generate shell completion scripts for your shell.\n\n\
+                     USAGE:\n  \
+                     harrier completion --shell <SHELL>\n\n\
+                     SUPPORTED SHELLS:\n  \
+                     bash, zsh, fish, powershell\n\n\
+                     INSTALLATION:\n\n\
+                     Bash:\n  \
+                     Add to ~/.bashrc:\n    \
+                     echo 'source <(harrier completion --shell bash)' >> ~/.bashrc\n    \
+                     source ~/.bashrc\n\n\
+                     Zsh:\n  \
+                     Add to ~/.zshrc:\n    \
+                     echo 'source <(harrier completion --shell zsh)' >> ~/.zshrc\n    \
+                     source ~/.zshrc\n\n\
+                     Fish:\n  \
+                     Save to completion directory:\n    \
+                     harrier completion --shell fish > ~/.config/fish/completions/harrier.fish\n\n\
+                     PowerShell:\n  \
+                     Add to your PowerShell profile:\n    \
+                     harrier completion --shell powershell >> $PROFILE\n    \
+                     Then restart PowerShell or run: . $PROFILE")]
+    Completion {
+        /// Shell to generate completions for
+        #[arg(long, value_enum, required = true)]
+        shell: Shell,
+    },
 }
 
 #[derive(Subcommand)]
@@ -179,12 +208,14 @@ enum ProfileCommands {
     /// Show detailed information about a profile
     Info {
         /// Profile name
+        #[arg(value_hint = ValueHint::Other)]
         name: String,
     },
 
     /// Delete a profile
     Delete {
         /// Profile name
+        #[arg(value_hint = ValueHint::Other)]
         name: String,
 
         /// Force deletion without confirmation
@@ -195,7 +226,7 @@ enum ProfileCommands {
     /// Clear cache from profiles
     Clean {
         /// Specific profile to clean (cleans all if not specified)
-        #[arg(long)]
+        #[arg(long, value_hint = ValueHint::Other)]
         profile: Option<String>,
     },
 }
@@ -262,6 +293,10 @@ fn main() -> Result<()> {
             ProfileCommands::Delete { name, force } => commands::profile::delete(&name, force),
             ProfileCommands::Clean { profile } => commands::profile::clean(profile.as_deref()),
         },
+        Commands::Completion { shell } => {
+            let mut cmd = Cli::command();
+            commands::completion::execute(shell, &mut cmd)
+        }
     }
 }
 
