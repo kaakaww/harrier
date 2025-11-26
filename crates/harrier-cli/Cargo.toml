@@ -37,6 +37,9 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+# Time
+chrono = { workspace = true }
+
 # URL parsing
 url = { workspace = true }
 

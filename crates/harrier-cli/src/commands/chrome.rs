@@ -27,6 +27,7 @@ pub fn execute(
     chrome_path: Option<PathBuf>,
     url: Option<String>,
     profile: Option<String>,
+    temp: bool,
 ) -> Result<()> {
     // Create tokio runtime for async operations
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -41,25 +42,33 @@ pub fn execute(
         println!("✅ Found Chrome at: {}", chrome_binary.display());
 
         // Step 2: Setup profile
-        let profile_manager = if let Some(profile_name) = profile {
+        let profile_manager = if temp {
+            // Temporary profile takes precedence
+            if profile.is_some() {
+                eprintln!("⚠️  Both --profile and --temp specified. Using temporary profile.");
+            }
+            println!("📁 Using temporary profile");
+            ProfileManager::temporary()?
+        } else if let Some(profile_name) = profile {
+            // Named persistent profile
             let profile_path = dirs::home_dir()
                 .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?
                 .join(".harrier")
                 .join("profiles")
-                .join(profile_name.clone());
+                .join(&profile_name);
 
-            println!("📁 Using profile: {}", profile_path.display());
+            println!("📁 Using profile: {}", profile_name);
             ProfileManager::persistent(profile_path)?
         } else {
-            println!("📁 Using temporary profile");
-            ProfileManager::temporary()?
+            // Default persistent profile
+            println!("📁 Using profile: default");
+            ProfileManager::default_profile()?
         };
 
-        // Step 3: Create launcher
+        // Step 3: Create launcher (always launches to about:blank)
         let launcher = ChromeLauncher::new(
             chrome_binary,
             profile_manager.path().to_path_buf(),
-            url.clone(),
         );
 
         let debugging_port = launcher.debugging_port();
@@ -70,8 +79,24 @@ pub fn execute(
         let chrome_pid = chrome_process.id();
         println!("✅ Chrome started successfully");
 
-        if let Some(start_url) = url {
-            println!("📍 Starting at: {}", start_url);
+        // Step 5: Create CDP session, clear cache, and navigate if needed
+        let cdp_session = CdpSession::new(debugging_port);
+
+        // Clear browser cache
+        println!("🧹 Clearing browser cache...");
+        match cdp_session.clear_browser_cache().await {
+            Ok(_) => println!("✅ Cache cleared"),
+            Err(e) => {
+                eprintln!("⚠️  Warning: Failed to clear cache: {}", e);
+                eprintln!("   Continuing anyway - some requests may be served from cache");
+            }
+        }
+
+        // Navigate to URL if provided
+        if let Some(start_url) = &url {
+            println!("🌐 Navigating to {}...", start_url);
+            cdp_session.navigate_to(start_url).await?;
+            println!("✅ Navigation complete");
         }
 
         println!("📊 Capturing network traffic...");
@@ -83,13 +108,11 @@ pub fn execute(
         println!();
         println!("Press a key when ready, or close Chrome naturally...");
 
-        // Step 5: Create CDP session and start capture
-        let cdp_session = CdpSession::new(debugging_port);
-
+        // Step 6: Start capture
         // Start CDP capture (returns shutdown channel and result receiver)
         let (shutdown_tx, capture_rx) = cdp_session.capture_traffic().await?;
 
-        // Step 6: Wait for Chrome to exit or user input
+        // Step 7: Wait for Chrome to exit or user input
         use console::Term;
 
         // Spawn user input task (non-blocking read)
