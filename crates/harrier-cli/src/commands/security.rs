@@ -1,3 +1,4 @@
+use crate::OutputFormat;
 use anyhow::Result;
 use std::path::Path;
 
@@ -6,7 +7,7 @@ pub fn execute(
     check_auth: bool,
     find_sensitive: bool,
     insecure_only: bool,
-    format: &str,
+    format: OutputFormat,
 ) -> Result<()> {
     tracing::info!(
         "Performing security analysis on HAR file: {}",
@@ -19,7 +20,7 @@ pub fn execute(
     println!("  Check auth: {}", check_auth);
     println!("  Find sensitive data: {}", find_sensitive);
     println!("  Insecure only: {}", insecure_only);
-    println!("  Format: {}", format);
+    println!("  Format: {}", format.as_str());
 
     Ok(())
 }

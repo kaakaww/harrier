@@ -1,3 +1,4 @@
+use crate::OutputFormat;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
@@ -6,7 +7,7 @@ pub fn execute(
     endpoints_only: bool,
     openapi: bool,
     output: Option<PathBuf>,
-    format: &str,
+    format: OutputFormat,
 ) -> Result<()> {
     tracing::info!("Discovering APIs in HAR file: {}", file.display());
 
@@ -18,7 +19,7 @@ pub fn execute(
     if let Some(o) = output {
         println!("  Output to: {}", o.display());
     }
-    println!("  Format: {}", format);
+    println!("  Format: {}", format.as_str());
 
     Ok(())
 }

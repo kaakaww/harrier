@@ -1,3 +1,4 @@
+use crate::OutputFormat;
 use anyhow::Result;
 use harrier_core::analysis::{AnalysisReport, Analyzer, PerformanceAnalyzer, SummaryAnalyzer};
 use harrier_core::har::{Entry, Har, HarReader};
@@ -7,15 +8,10 @@ use std::path::Path;
 use url::Url;
 
 /// Analyze a HAR file and return structured results
-pub fn analyze_har(file: &Path, include_timings: bool) -> Result<AnalysisReport> {
-    tracing::debug!("Reading HAR file: {}", file.display());
-
-    // Read HAR file
-    let har = HarReader::from_file(file)?;
-
+pub fn analyze_har(har: &Har, include_timings: bool) -> Result<AnalysisReport> {
     // Run summary analysis
     let summary_analyzer = SummaryAnalyzer;
-    let summary = summary_analyzer.analyze(&har)?;
+    let summary = summary_analyzer.analyze(har)?;
 
     // Run performance analysis
     let performance_analyzer = if include_timings {
@@ -23,7 +19,7 @@ pub fn analyze_har(file: &Path, include_timings: bool) -> Result<AnalysisReport>
     } else {
         PerformanceAnalyzer::new(0) // No slowest requests if timings not requested
     };
-    let performance = performance_analyzer.analyze(&har)?;
+    let performance = performance_analyzer.analyze(har)?;
 
     Ok(AnalysisReport {
         summary,
@@ -53,6 +49,10 @@ pub struct HostStats {
 /// Examples: api.example.com -> example.com, www.example.com -> example.com, api.co.uk -> example.co.uk
 /// This properly handles public suffixes like .co.uk, .com.au, etc.
 fn get_root_domain(domain: &str) -> String {
+    if domain.parse::<std::net::IpAddr>().is_ok() {
+        return domain.to_string();
+    }
+
     // Use the psl crate to get the registrable domain (eTLD+1)
     // This handles public suffixes correctly
     match psl::domain(domain.as_bytes()) {
@@ -183,15 +183,15 @@ pub fn execute(
     show_hosts: bool,
     show_auth: bool,
     verbose: bool,
-    format: &str,
+    format: OutputFormat,
 ) -> Result<()> {
     tracing::info!("Analyzing HAR file: {}", file.display());
 
-    // Read HAR file
+    // Read HAR file once for all analyses
     let har = HarReader::from_file(file)?;
 
     // Analyze the HAR file
-    let report = analyze_har(file, timings)?;
+    let report = analyze_har(&har, timings)?;
 
     // Optionally analyze hosts
     let hosts = if show_hosts {
@@ -209,9 +209,11 @@ pub fn execute(
 
     // Output results based on format
     match format {
-        "json" => output_json(&report, hosts.as_deref(), auth.as_ref())?,
-        "table" => output_table(&report, hosts.as_deref(), auth.as_ref(), timings)?,
-        _ => output_pretty(&report, hosts.as_deref(), auth.as_ref(), timings, verbose)?, // "pretty" is default
+        OutputFormat::Json => output_json(&report, hosts.as_deref(), auth.as_ref())?,
+        OutputFormat::Table => output_table(&report, hosts.as_deref(), auth.as_ref(), timings)?,
+        OutputFormat::Pretty => {
+            output_pretty(&report, hosts.as_deref(), auth.as_ref(), timings, verbose)?
+        }
     }
 
     Ok(())
@@ -716,8 +718,8 @@ mod tests {
         // Single label domain
         assert_eq!(get_root_domain("localhost"), "localhost");
 
-        // IP addresses - psl correctly identifies the last two octets as the "domain"
-        assert_eq!(get_root_domain("192.168.1.1"), "1.1");
+        // IP addresses should be returned as-is
+        assert_eq!(get_root_domain("192.168.1.1"), "192.168.1.1");
 
         // Multi-level domains
         assert_eq!(get_root_domain("a.b.c.example.com"), "example.com");

@@ -1,9 +1,26 @@
 use anyhow::Result;
-use clap::{CommandFactory, Parser, Subcommand, ValueHint};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum, ValueHint};
 use clap_complete::Shell;
 use std::path::PathBuf;
 
 mod commands;
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+pub enum OutputFormat {
+    Pretty,
+    Json,
+    Table,
+}
+
+impl OutputFormat {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OutputFormat::Pretty => "pretty",
+            OutputFormat::Json => "json",
+            OutputFormat::Table => "table",
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "harrier")]
@@ -21,8 +38,8 @@ pub struct Cli {
     verbose: bool,
 
     /// Output format
-    #[arg(short, long, global = true, default_value = "pretty")]
-    format: String,
+    #[arg(short, long, global = true, default_value_t = OutputFormat::Pretty, value_enum)]
+    format: OutputFormat,
 }
 
 #[derive(Subcommand)]
@@ -245,7 +262,7 @@ fn main() -> Result<()> {
             hosts,
             auth,
             verbose,
-        } => commands::stats::execute(&file, timings, hosts, auth, verbose, &cli.format),
+        } => commands::stats::execute(&file, timings, hosts, auth, verbose, cli.format),
         Commands::Filter {
             file,
             hosts,
@@ -264,14 +281,14 @@ fn main() -> Result<()> {
             check_auth,
             find_sensitive,
             insecure_only,
-            &cli.format,
+            cli.format,
         ),
         Commands::Discover {
             file,
             endpoints_only,
             openapi,
             output,
-        } => commands::discover::execute(&file, endpoints_only, openapi, output, &cli.format),
+        } => commands::discover::execute(&file, endpoints_only, openapi, output, cli.format),
         Commands::Proxy {
             port,
             output,
