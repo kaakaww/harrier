@@ -144,9 +144,9 @@ enum Commands {
         #[arg(long, value_hint = ValueHint::Hostname)]
         hosts: Vec<String>,
 
-        /// Run hawk scan after capture
+        /// Print HawkScan configuration guidance after capture
         #[arg(long)]
-        scan: bool,
+        hawkscan: bool,
 
         /// Override Chrome binary location
         #[arg(long, value_hint = ValueHint::FilePath)]
@@ -281,12 +281,12 @@ fn main() -> Result<()> {
         Commands::Chrome {
             output,
             hosts,
-            scan,
+            hawkscan,
             chrome_path,
             url,
             profile,
             temp,
-        } => commands::chrome::execute(&output, hosts, scan, chrome_path, url, profile, temp),
+        } => commands::chrome::execute(&output, hosts, hawkscan, chrome_path, url, profile, temp),
         Commands::Profile { command } => match command {
             ProfileCommands::List => commands::profile::list(),
             ProfileCommands::Info { name } => commands::profile::info(&name),

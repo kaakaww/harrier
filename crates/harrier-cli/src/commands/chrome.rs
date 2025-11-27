@@ -23,7 +23,7 @@ fn kill_process_by_pid(pid: u32) {
 pub fn execute(
     output: &Path,
     hosts: Vec<String>,
-    scan: bool,
+    hawkscan: bool,
     chrome_path: Option<PathBuf>,
     url: Option<String>,
     profile: Option<String>,
@@ -255,11 +255,9 @@ pub fn execute(
         std::fs::write(output, har_json)?;
         println!("✅ HAR file written to: {}", output.display());
 
-        // Step 11: Run hawk scan if requested
-        if scan {
-            println!("🦅 Running StackHawk scan...");
-            run_hawk_scan(output)?;
-            println!("✅ Scan complete");
+        // Step 11: Print HawkScan guidance if requested
+        if hawkscan {
+            print_hawkscan_guidance(output);
         }
 
         Ok(())
@@ -284,34 +282,17 @@ fn apply_host_filter(
         .map_err(|e| anyhow::anyhow!("Filter failed: {}", e))
 }
 
-/// Run StackHawk scan with HAR file
-fn run_hawk_scan(har_path: &Path) -> Result<()> {
-    use std::process::Command;
-
-    // Check if hawk binary exists
-    if which::which("hawk").is_err() {
-        return Err(anyhow::anyhow!(
-            "hawk command not found. Install StackHawk CLI or omit --scan flag."
-        ));
-    }
-
-    // Check for stackhawk.yml
-    if !std::path::Path::new("stackhawk.yml").exists() {
-        println!("⚠️  No stackhawk.yml found, running scan with defaults");
-    }
-
-    // Run hawk scan
-    let output = Command::new("hawk").arg("scan").arg(har_path).output()?;
-
-    if !output.status.success() {
-        return Err(anyhow::anyhow!(
-            "hawk scan failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    // Print hawk output
-    println!("{}", String::from_utf8_lossy(&output.stdout));
-
-    Ok(())
+/// Print HawkScan configuration guidance
+fn print_hawkscan_guidance(har_path: &Path) {
+    println!();
+    println!("📋 To use this HAR with HawkScan, add the following to your stackhawk.yml:");
+    println!();
+    println!("hawk:");
+    println!("  spider:");
+    println!("    har:");
+    println!("      file:");
+    println!("        paths:");
+    println!("          - {}", har_path.display());
+    println!();
+    println!("Then run: hawk scan");
 }

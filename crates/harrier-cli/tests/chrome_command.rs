@@ -19,7 +19,7 @@ fn test_chrome_command_help() {
         ))
         .stdout(predicate::str::contains("--output"))
         .stdout(predicate::str::contains("--hosts"))
-        .stdout(predicate::str::contains("--scan"))
+        .stdout(predicate::str::contains("--hawkscan"))
         .stdout(predicate::str::contains("--profile"));
 }
 
