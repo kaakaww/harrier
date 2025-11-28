@@ -91,9 +91,7 @@ fn detect_auth_for_entries(entries: &[&Entry]) -> Option<String> {
             }
             // Check for API key headers
             let header_lower = header.name.to_lowercase();
-            if header_lower == "x-api-key"
-                || header_lower == "api-key"
-                || header_lower == "apikey"
+            if header_lower == "x-api-key" || header_lower == "api-key" || header_lower == "apikey"
             {
                 return Some(format!("API Key ({})", header.name));
             }
@@ -245,18 +243,16 @@ fn build_architecture_map(
         let role = infer_host_role(domain, &api_type, &auth_method);
 
         // Check for OAuth provider relationship
-        if let Some(ref r) = role {
-            if r.contains("Authentication") {
-                if let Some(ref pk) = primary_key {
-                    if let Some((_, primary_domain, _, _)) = host_entries.get(pk) {
-                        relationships.push(HostRelationship {
-                            from: primary_domain.clone(),
-                            to: domain.clone(),
-                            relationship_type: "oauth_provider".to_string(),
-                        });
-                    }
-                }
-            }
+        if let Some(ref r) = role
+            && r.contains("Authentication")
+            && let Some(ref pk) = primary_key
+            && let Some((_, primary_domain, _, _)) = host_entries.get(pk)
+        {
+            relationships.push(HostRelationship {
+                from: primary_domain.clone(),
+                to: domain.clone(),
+                relationship_type: "oauth_provider".to_string(),
+            });
         }
 
         hosts.push(HostMapInfo {
@@ -273,21 +269,15 @@ fn build_architecture_map(
     }
 
     // Sort hosts: primary first, then same domain by count, then third party by count
-    hosts.sort_by(|a, b| {
-        match (a.category, b.category) {
-            (HostCategory::Primary, _) => std::cmp::Ordering::Less,
-            (_, HostCategory::Primary) => std::cmp::Ordering::Greater,
-            (HostCategory::SameDomain, HostCategory::ThirdParty) => std::cmp::Ordering::Less,
-            (HostCategory::ThirdParty, HostCategory::SameDomain) => std::cmp::Ordering::Greater,
-            _ => b.request_count.cmp(&a.request_count),
-        }
+    hosts.sort_by(|a, b| match (a.category, b.category) {
+        (HostCategory::Primary, _) => std::cmp::Ordering::Less,
+        (_, HostCategory::Primary) => std::cmp::Ordering::Greater,
+        (HostCategory::SameDomain, HostCategory::ThirdParty) => std::cmp::Ordering::Less,
+        (HostCategory::ThirdParty, HostCategory::SameDomain) => std::cmp::Ordering::Greater,
+        _ => b.request_count.cmp(&a.request_count),
     });
 
-    let file_name = har
-        .log
-        .creator
-        .name
-        .clone();
+    let file_name = har.log.creator.name.clone();
 
     ArchitectureMap {
         file_name,
@@ -389,10 +379,7 @@ fn output_pretty(map: &ArchitectureMap, file: &Path, show_all: bool) -> Result<(
     );
 
     for host in &map.hosts {
-        let auth_display = host
-            .auth_method
-            .as_deref()
-            .unwrap_or("None");
+        let auth_display = host.auth_method.as_deref().unwrap_or("None");
         println!(
             "  {:<35} {:>8}  {:<15} {}",
             format!("{}:{}", host.host, host.port),

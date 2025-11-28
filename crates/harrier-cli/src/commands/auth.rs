@@ -86,10 +86,7 @@ fn output_pretty(
                 );
             }
             if summary.key_endpoints.len() > 8 {
-                println!(
-                    "  ... and {} more",
-                    summary.key_endpoints.len() - 8
-                );
+                println!("  ... and {} more", summary.key_endpoints.len() - 8);
             }
         }
     } else {

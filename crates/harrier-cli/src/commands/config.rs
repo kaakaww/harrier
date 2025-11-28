@@ -120,9 +120,7 @@ fn is_scannable_host(host: &str, _role: Option<&str>) -> bool {
 fn infer_role(host: &str) -> Option<&'static str> {
     let host_lower = host.to_lowercase();
 
-    if host_lower.contains("auth0")
-        || host_lower.contains("okta")
-        || host_lower.contains("cognito")
+    if host_lower.contains("auth0") || host_lower.contains("okta") || host_lower.contains("cognito")
     {
         return Some("OAuth Provider");
     }
@@ -187,7 +185,10 @@ fn generate_yaml_config(
                 yaml.push_str("    clientSecret: ${OAUTH_CLIENT_SECRET}\n");
                 notes.push("OAuth 2.0 / JWT detected - configure token endpoint".to_string());
                 if matches!(auth, AuthMethod::Jwt) {
-                    notes.push("JWT tokens detected - ensure token lifetime covers scan duration".to_string());
+                    notes.push(
+                        "JWT tokens detected - ensure token lifetime covers scan duration"
+                            .to_string(),
+                    );
                 }
             }
             AuthMethod::Basic => {
@@ -213,7 +214,9 @@ fn generate_yaml_config(
                 yaml.push_str("    name: ${SESSION_COOKIE_NAME}\n");
                 yaml.push_str("    value: ${SESSION_COOKIE_VALUE}\n");
                 notes.push("Cookie-based session detected".to_string());
-                notes.push("Consider using form-based login for automatic session handling".to_string());
+                notes.push(
+                    "Consider using form-based login for automatic session handling".to_string(),
+                );
             }
             AuthMethod::OAuth => {
                 yaml.push_str("authentication:\n");
@@ -241,7 +244,12 @@ fn generate_yaml_config(
 }
 
 /// Build configurations for all hosts
-fn build_host_configs(har: &Har, har_file: &Path, host_filter: Option<&str>, all_hosts: bool) -> Vec<HostConfig> {
+fn build_host_configs(
+    har: &Har,
+    har_file: &Path,
+    host_filter: Option<&str>,
+    all_hosts: bool,
+) -> Vec<HostConfig> {
     let mut host_entries: HashMap<String, (String, String, u16, Vec<&Entry>)> = HashMap::new();
     let mut first_host_key: Option<String> = None;
 
@@ -276,10 +284,8 @@ fn build_host_configs(har: &Har, har_file: &Path, host_filter: Option<&str>, all
 
     for (key, (protocol, domain, port, entries)) in &host_entries {
         // Apply host filter if specified
-        if let Some(filter) = host_filter {
-            if !domain.contains(filter) {
-                continue;
-            }
+        if host_filter.is_some_and(|filter| !domain.contains(filter)) {
+            continue;
         }
 
         let is_primary = first_host_key.as_ref() == Some(key);
@@ -299,14 +305,20 @@ fn build_host_configs(har: &Har, har_file: &Path, host_filter: Option<&str>, all
         // Detect auth method for this host
         let auth_method = detect_auth_method(entries);
 
-        let (yaml_config, mut notes) =
-            generate_yaml_config(domain, *port, protocol, har_file, auth_method.as_ref(), is_primary);
+        let (yaml_config, mut notes) = generate_yaml_config(
+            domain,
+            *port,
+            protocol,
+            har_file,
+            auth_method.as_ref(),
+            is_primary,
+        );
 
         // Add role-based notes
-        if let Some(r) = role {
-            if !is_scannable {
-                notes.insert(0, format!("{} - typically not scanned", r));
-            }
+        if let Some(r) = role
+            && !is_scannable
+        {
+            notes.insert(0, format!("{} - typically not scanned", r));
         }
 
         configs.push(HostConfig {
@@ -321,18 +333,14 @@ fn build_host_configs(har: &Har, har_file: &Path, host_filter: Option<&str>, all
     }
 
     // Sort: primary first, then scannable by request count
-    configs.sort_by(|a, b| {
-        match (a.is_primary, b.is_primary) {
+    configs.sort_by(|a, b| match (a.is_primary, b.is_primary) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => match (a.is_scannable, b.is_scannable) {
             (true, false) => std::cmp::Ordering::Less,
             (false, true) => std::cmp::Ordering::Greater,
-            _ => {
-                match (a.is_scannable, b.is_scannable) {
-                    (true, false) => std::cmp::Ordering::Less,
-                    (false, true) => std::cmp::Ordering::Greater,
-                    _ => std::cmp::Ordering::Equal,
-                }
-            }
-        }
+            _ => std::cmp::Ordering::Equal,
+        },
     });
 
     configs
@@ -397,11 +405,7 @@ fn format_pretty(configs: &[HostConfig], file: &Path) -> Result<String> {
                 "=".repeat(config.host.len() + 24)
             )
         } else {
-            format!(
-                "# {}\n# {}\n",
-                config.host,
-                "=".repeat(config.host.len())
-            )
+            format!("# {}\n# {}\n", config.host, "=".repeat(config.host.len()))
         };
 
         output.push_str(&host_display);
@@ -417,7 +421,10 @@ fn format_pretty(configs: &[HostConfig], file: &Path) -> Result<String> {
                 }
             }
         } else {
-            output.push_str(&format!("# {} is typically not included in security scans.\n", config.host));
+            output.push_str(&format!(
+                "# {} is typically not included in security scans.\n",
+                config.host
+            ));
             if let Some(note) = config.notes.first() {
                 output.push_str(&format!("# {}\n", note));
             }
@@ -448,11 +455,7 @@ fn format_table(configs: &[HostConfig]) -> Result<String> {
         let notes = config.notes.join("; ");
         output.push_str(&format!(
             "{},{},{},{},\"{}\"\n",
-            config.host,
-            config.port,
-            config.is_primary,
-            config.is_scannable,
-            notes
+            config.host, config.port, config.is_primary, config.is_scannable, notes
         ));
     }
     Ok(output)

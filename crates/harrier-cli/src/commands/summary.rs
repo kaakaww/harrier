@@ -177,11 +177,12 @@ fn get_auth_summary(har: &Har) -> Option<AuthSummaryBrief> {
     // Determine session type
     let session_type = if !auth_analysis.jwt_tokens.is_empty() {
         "JWT Bearer tokens (stateless)".to_string()
-    } else if auth_analysis
-        .sessions
-        .iter()
-        .any(|s| matches!(s.session_type, harrier_detectors::SessionType::Cookie { .. }))
-    {
+    } else if auth_analysis.sessions.iter().any(|s| {
+        matches!(
+            s.session_type,
+            harrier_detectors::SessionType::Cookie { .. }
+        )
+    }) {
         "Cookie-based sessions".to_string()
     } else if !auth_analysis.sessions.is_empty() {
         "Token-based sessions".to_string()
@@ -236,11 +237,14 @@ pub fn execute(file: &Path, format: OutputFormat) -> Result<()> {
     let auth_summary = get_auth_summary(&har);
 
     // Build time range
-    let time_range = basic_summary.date_range.as_ref().map(|(start, end)| TimeRange {
-        start: start.clone(),
-        end: end.clone(),
-        duration_display: format_duration(start, end),
-    });
+    let time_range = basic_summary
+        .date_range
+        .as_ref()
+        .map(|(start, end)| TimeRange {
+            start: start.clone(),
+            end: end.clone(),
+            duration_display: format_duration(start, end),
+        });
 
     // Build architecture summary
     let architecture = ArchitectureSummary {
@@ -407,15 +411,24 @@ fn output_table(summary: &HarSummary) -> Result<()> {
     println!("Category,Host,API Type,Requests");
 
     if let Some(ref target) = summary.architecture.target {
-        println!("Target,{},{},{}", target.host, target.api_type, target.request_count);
+        println!(
+            "Target,{},{},{}",
+            target.host, target.api_type, target.request_count
+        );
     }
 
     for host in &summary.architecture.same_domain {
-        println!("Same Domain,{},{},{}", host.host, host.api_type, host.request_count);
+        println!(
+            "Same Domain,{},{},{}",
+            host.host, host.api_type, host.request_count
+        );
     }
 
     for host in &summary.architecture.third_party {
-        println!("Third Party,{},{},{}", host.host, host.api_type, host.request_count);
+        println!(
+            "Third Party,{},{},{}",
+            host.host, host.api_type, host.request_count
+        );
     }
 
     if let Some(ref auth) = summary.auth_summary {

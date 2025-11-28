@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand, ValueHint};
 use clap_complete::Shell;
-use harrier_cli::{commands, OutputFormat};
+use harrier_cli::{OutputFormat, commands};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -238,10 +238,10 @@ fn main() -> Result<()> {
     init_logging(cli.verbose);
 
     // Handle default command (positional HAR file)
-    if let Some(ref file) = cli.file {
-        if cli.command.is_none() {
-            return commands::summary::execute(file, cli.format);
-        }
+    if let Some(ref file) = cli.file
+        && cli.command.is_none()
+    {
+        return commands::summary::execute(file, cli.format);
     }
 
     // Execute subcommand
