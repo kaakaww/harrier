@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand, ValueHint};
 use clap_complete::Shell;
-use harrier_cli::{OutputFormat, commands};
+use harrier_cli::{commands, OutputFormat};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -9,11 +9,16 @@ use std::path::PathBuf;
 #[command(author, version, about, long_about = None)]
 #[command(
     about = "CLI tool for working with HTTP Archive (HAR) files",
-    long_about = "Harrier analyzes, filters, and modifies HAR files for security testing and API discovery."
+    long_about = "Harrier analyzes, filters, and modifies HAR files for security testing and API discovery.\n\n\
+                  Quick start: harrier <file.har> for a summary of any HAR file."
 )]
 pub struct Cli {
+    /// HAR file to analyze (shows quick summary)
+    #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
+    file: Option<PathBuf>,
+
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 
     /// Enable verbose logging
     #[arg(short, long, global = true)]
@@ -26,27 +31,61 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Display HAR file statistics
-    Stats {
+    /// Show architecture map with host relationships and API types
+    Map {
         /// HAR file to analyze
         #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         file: PathBuf,
 
-        /// Show detailed timing info
-        #[arg(long)]
-        timings: bool,
+        /// Override primary target detection
+        #[arg(long, value_hint = ValueHint::Hostname)]
+        target: Option<String>,
 
-        /// Show all hosts with request counts
+        /// Show all hosts without grouping
         #[arg(long)]
-        hosts: bool,
+        all: bool,
+    },
 
-        /// Show authentication analysis
+    /// Analyze authentication flows and session handling
+    Auth {
+        /// HAR file to analyze
+        #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
+        file: PathBuf,
+
+        /// Analyze specific host (default: primary)
+        #[arg(long, value_hint = ValueHint::Hostname)]
+        host: Option<String>,
+
+        /// Show all detected auth flows
         #[arg(long)]
-        auth: bool,
+        flows: bool,
 
-        /// Show all details
-        #[arg(short, long)]
-        verbose: bool,
+        /// Show detailed JWT token analysis
+        #[arg(long)]
+        jwt: bool,
+
+        /// Show security findings only
+        #[arg(long)]
+        security: bool,
+    },
+
+    /// Generate HawkScan configuration snippets
+    Config {
+        /// HAR file to analyze
+        #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
+        file: PathBuf,
+
+        /// Generate config for specific host only
+        #[arg(long, value_hint = ValueHint::Hostname)]
+        host: Option<String>,
+
+        /// Generate configs for all scannable hosts
+        #[arg(long)]
+        all_hosts: bool,
+
+        /// Write to file instead of stdout
+        #[arg(short, long, value_hint = ValueHint::FilePath)]
+        output: Option<PathBuf>,
     },
 
     /// Filter HAR entries by criteria
@@ -73,44 +112,6 @@ enum Commands {
 
         /// Output file (defaults to stdout)
         #[arg(short, long, value_hint = ValueHint::FilePath)]
-        output: Option<PathBuf>,
-    },
-
-    /// Perform security analysis
-    Security {
-        /// HAR file to analyze
-        #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
-        file: PathBuf,
-
-        /// Check authentication patterns
-        #[arg(long)]
-        check_auth: bool,
-
-        /// Scan for sensitive data
-        #[arg(long)]
-        find_sensitive: bool,
-
-        /// Show only insecure requests
-        #[arg(long)]
-        insecure_only: bool,
-    },
-
-    /// Discover APIs and app types
-    Discover {
-        /// HAR file to analyze
-        #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
-        file: PathBuf,
-
-        /// Show only API endpoints
-        #[arg(long)]
-        endpoints_only: bool,
-
-        /// Generate OpenAPI spec
-        #[arg(long)]
-        openapi: bool,
-
-        /// Output file for spec
-        #[arg(short, long, requires = "openapi", value_hint = ValueHint::FilePath)]
         output: Option<PathBuf>,
     },
 
@@ -236,48 +237,46 @@ fn main() -> Result<()> {
     // Initialize logging
     init_logging(cli.verbose);
 
-    // Execute the command
+    // Handle default command (positional HAR file)
+    if let Some(ref file) = cli.file {
+        if cli.command.is_none() {
+            return commands::summary::execute(file, cli.format);
+        }
+    }
+
+    // Execute subcommand
     match cli.command {
-        Commands::Stats {
+        Some(Commands::Map { file, target, all }) => {
+            commands::map::execute(&file, target.as_deref(), all, cli.format)
+        }
+        Some(Commands::Auth {
             file,
-            timings,
-            hosts,
-            auth,
-            verbose,
-        } => commands::stats::execute(&file, timings, hosts, auth, verbose, cli.format),
-        Commands::Filter {
+            host,
+            flows,
+            jwt,
+            security,
+        }) => commands::auth::execute(&file, host.as_deref(), flows, jwt, security, cli.format),
+        Some(Commands::Config {
+            file,
+            host,
+            all_hosts,
+            output,
+        }) => commands::config::execute(&file, host.as_deref(), all_hosts, output, cli.format),
+        Some(Commands::Filter {
             file,
             hosts,
             status,
             method,
             content_type,
             output,
-        } => commands::filter::execute(&file, hosts, status, method, content_type, output),
-        Commands::Security {
-            file,
-            check_auth,
-            find_sensitive,
-            insecure_only,
-        } => commands::security::execute(
-            &file,
-            check_auth,
-            find_sensitive,
-            insecure_only,
-            cli.format,
-        ),
-        Commands::Discover {
-            file,
-            endpoints_only,
-            openapi,
-            output,
-        } => commands::discover::execute(&file, endpoints_only, openapi, output, cli.format),
-        Commands::Proxy {
+        }) => commands::filter::execute(&file, hosts, status, method, content_type, output),
+        Some(Commands::Proxy {
             port,
             output,
             cert,
             key,
-        } => commands::proxy::execute(port, &output, cert.as_deref(), key.as_deref()),
-        Commands::Chrome {
+        }) => commands::proxy::execute(port, &output, cert.as_deref(), key.as_deref()),
+        Some(Commands::Chrome {
             output,
             hosts,
             hawkscan,
@@ -285,16 +284,21 @@ fn main() -> Result<()> {
             url,
             profile,
             temp,
-        } => commands::chrome::execute(&output, hosts, hawkscan, chrome_path, url, profile, temp),
-        Commands::Profile { command } => match command {
+        }) => commands::chrome::execute(&output, hosts, hawkscan, chrome_path, url, profile, temp),
+        Some(Commands::Profile { command }) => match command {
             ProfileCommands::List => commands::profile::list(),
             ProfileCommands::Info { name } => commands::profile::info(&name),
             ProfileCommands::Delete { name, force } => commands::profile::delete(&name, force),
             ProfileCommands::Clean { profile } => commands::profile::clean(profile.as_deref()),
         },
-        Commands::Completion { shell } => {
+        Some(Commands::Completion { shell }) => {
             let mut cmd = Cli::command();
             commands::completion::execute(shell, &mut cmd)
+        }
+        None => {
+            // No file and no command - show help
+            Cli::command().print_help()?;
+            Ok(())
         }
     }
 }

@@ -1,8 +1,9 @@
+pub mod auth;
 pub mod chrome;
 pub mod completion;
-pub mod discover;
+pub mod config;
 pub mod filter;
+pub mod map;
 pub mod profile;
 pub mod proxy;
-pub mod security;
-pub mod stats;
+pub mod summary;
