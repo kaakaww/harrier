@@ -1,26 +1,8 @@
 use anyhow::Result;
-use clap::{CommandFactory, Parser, Subcommand, ValueEnum, ValueHint};
+use clap::{CommandFactory, Parser, Subcommand, ValueHint};
 use clap_complete::Shell;
+use harrier_cli::{OutputFormat, commands};
 use std::path::PathBuf;
-
-mod commands;
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
-pub enum OutputFormat {
-    Pretty,
-    Json,
-    Table,
-}
-
-impl OutputFormat {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            OutputFormat::Pretty => "pretty",
-            OutputFormat::Json => "json",
-            OutputFormat::Table => "table",
-        }
-    }
-}
 
 #[derive(Parser)]
 #[command(name = "harrier")]

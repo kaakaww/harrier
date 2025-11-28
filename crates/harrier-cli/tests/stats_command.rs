@@ -1,5 +1,5 @@
 use harrier_core::analysis::AnalysisReport;
-use harrier_core::har::{Cache, Content, Entry, Request, Response, Timings};
+use harrier_core::har::{Cache, Content, Entry, HarReader, Request, Response, Timings};
 use std::path::PathBuf;
 
 /// Test that analyze_har function reads a HAR file and returns analysis results
@@ -15,8 +15,10 @@ fn test_analyze_har_returns_summary_stats() {
         .join("fixtures")
         .join("sample.har");
 
+    let har = HarReader::from_file(&fixture_path).expect("Failed to read HAR file");
+
     // Act - call the analyze_har function that will perform the analysis
-    let result = harrier_cli::commands::stats::analyze_har(&fixture_path, false);
+    let result = harrier_cli::commands::stats::analyze_har(&har, false);
 
     // Assert
     assert!(result.is_ok(), "Should successfully analyze HAR file");
@@ -43,8 +45,10 @@ fn test_analyze_normalizes_http_versions() {
         .join("fixtures")
         .join("mixed-http-versions.har");
 
+    let har = HarReader::from_file(&fixture_path).expect("Failed to read HAR file");
+
     // Act
-    let result = harrier_cli::commands::stats::analyze_har(&fixture_path, false);
+    let result = harrier_cli::commands::stats::analyze_har(&har, false);
 
     // Assert
     assert!(result.is_ok(), "Should successfully analyze HAR file");
@@ -89,8 +93,10 @@ fn test_analyze_har_with_timings() {
         .join("fixtures")
         .join("sample.har");
 
+    let har = HarReader::from_file(&fixture_path).expect("Failed to read HAR file");
+
     // Act - analyze with timings
-    let result = harrier_cli::commands::stats::analyze_har(&fixture_path, true);
+    let result = harrier_cli::commands::stats::analyze_har(&har, true);
 
     // Assert
     assert!(
