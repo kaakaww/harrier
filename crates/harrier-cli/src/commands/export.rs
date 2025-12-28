@@ -250,6 +250,19 @@ fn generate_yaml_config(
     (yaml, notes)
 }
 
+/// Check if a URL should be considered for primary host detection
+fn is_web_traffic(protocol: &str, domain: &str) -> bool {
+    // Only HTTP/HTTPS are web traffic
+    if protocol != "http" && protocol != "https" {
+        return false;
+    }
+    // Skip localhost/loopback for primary detection
+    if domain == "localhost" || domain.starts_with("127.") || domain == "[::1]" {
+        return false;
+    }
+    true
+}
+
 /// Build configurations for all hosts
 fn build_host_configs(
     har: &Har,
@@ -260,6 +273,13 @@ fn build_host_configs(
     let mut host_entries: HashMap<String, (String, String, u16, Vec<&Entry>)> = HashMap::new();
     let mut first_host_key: Option<String> = None;
 
+    // Check if target host was specified via --url during capture
+    let target_host = har
+        .log
+        .harrier_metadata
+        .as_ref()
+        .and_then(|m| m.target_host.clone());
+
     for entry in &har.log.entries {
         if let Ok(url) = Url::parse(&entry.request.url) {
             let protocol = url.scheme().to_string();
@@ -268,10 +288,23 @@ fn build_host_configs(
                 .port()
                 .unwrap_or_else(|| if protocol == "https" { 443 } else { 80 });
 
+            // Skip non-web traffic (chrome-extension://, data:, etc.)
+            if !is_web_traffic(&protocol, &domain) {
+                continue;
+            }
+
             let key = format!("{}://{}:{}", protocol, domain, port);
 
+            // Use metadata target_host if available, otherwise first web traffic URL
             if first_host_key.is_none() {
-                first_host_key = Some(key.clone());
+                if let Some(ref th) = target_host {
+                    // Check if this entry matches the target host
+                    if domain == *th || domain.ends_with(&format!(".{}", th)) {
+                        first_host_key = Some(key.clone());
+                    }
+                } else {
+                    first_host_key = Some(key.clone());
+                }
             }
 
             host_entries
@@ -279,6 +312,23 @@ fn build_host_configs(
                 .and_modify(|(_, _, _, entries)| entries.push(entry))
                 .or_insert((protocol, domain, port, vec![entry]));
         }
+    }
+
+    // If target_host was specified but no entries matched, find it in host_entries
+    if first_host_key.is_none()
+        && let Some(ref th) = target_host
+    {
+        for (key, (_, domain, _, _)) in &host_entries {
+            if domain == th || domain.ends_with(&format!(".{}", th)) {
+                first_host_key = Some(key.clone());
+                break;
+            }
+        }
+    }
+
+    // Final fallback: use first host in entries
+    if first_host_key.is_none() {
+        first_host_key = host_entries.keys().next().cloned();
     }
 
     let primary_root_domain = first_host_key.as_ref().and_then(|key| {

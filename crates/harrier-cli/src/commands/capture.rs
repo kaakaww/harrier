@@ -126,6 +126,8 @@ fn execute_browser(
             println!("🌐 Navigating to {}...", start_url);
             cdp_session.navigate_to(start_url).await?;
             println!("✅ Navigation complete");
+        } else {
+            println!("💡 Tip: Use --url <target> to ensure accurate primary host detection");
         }
 
         println!("📊 Capturing network traffic...");
@@ -254,8 +256,11 @@ fn execute_browser(
         let request_count = network_capture.count();
         println!("📊 Captured {} HTTP requests", request_count);
 
-        // Step 9: Convert to HAR
-        let mut har = network_capture.to_har();
+        // Step 9: Convert to HAR with metadata
+        let mut har = network_capture.to_har_with_metadata(
+            url.as_deref(),
+            Some("browser"),
+        );
 
         // Step 10: Apply host filters if specified
         if !hosts.is_empty() {
@@ -268,6 +273,11 @@ fn execute_browser(
         let har_json = serde_json::to_string_pretty(&har)?;
         std::fs::write(output, har_json)?;
         println!("✅ HAR file written to: {}", output.display());
+
+        // Remind about --url if not specified
+        if url.is_none() {
+            println!("💡 Next time, use --url <target> for accurate primary host detection");
+        }
 
         // Step 12: Print HawkScan guidance if requested
         if hawkscan {
@@ -393,7 +403,10 @@ fn execute_proxy(
                     "name": "Harrier",
                     "version": env!("CARGO_PKG_VERSION")
                 },
-                "entries": har_entries
+                "entries": har_entries,
+                "_harrier": {
+                    "capture_mode": "proxy"
+                }
             }
         });
 
