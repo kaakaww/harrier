@@ -3,15 +3,52 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'v*'
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          make changelog V=${{ steps.get_version.outputs.version }} >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Harrier v${{ steps.get_version.outputs.version }}
+          body: ${{ steps.changelog.outputs.content }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     name: Build ${{ matrix.target }}
+    needs: create-release
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       matrix:
         include:
@@ -19,31 +56,37 @@ jobs:
           - target: x86_64-apple-darwin
             os: macos-13
             cross: false
+            archive: tar.gz
 
           # macOS Apple Silicon
           - target: aarch64-apple-darwin
             os: macos-14
             cross: false
+            archive: tar.gz
 
           # Windows x64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             cross: false
+            archive: zip
 
           # Windows ARM64
           - target: aarch64-pc-windows-msvc
             os: windows-latest
             cross: true
+            archive: zip
 
           # Linux x64
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             cross: false
+            archive: tar.gz
 
           # Linux ARM64
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             cross: true
+            archive: tar.gz
 
     steps:
       - uses: actions/checkout@v4
@@ -72,49 +115,39 @@ jobs:
           fi
         shell: bash
 
-      - name: Prepare binary
+      - name: Create archive (Unix)
+        if: matrix.archive == 'tar.gz'
         run: |
           cd target/${{ matrix.target }}/release
-          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            BINARY="harrier.exe"
-            RELEASE_BINARY="harrier-${{ github.ref_name }}-${{ matrix.target }}.exe"
-          else
-            BINARY="harrier"
-            RELEASE_BINARY="harrier-${{ github.ref_name }}-${{ matrix.target }}"
-          fi
-          mv "$BINARY" "$RELEASE_BINARY"
-          echo "RELEASE_BINARY=$RELEASE_BINARY" >> $GITHUB_ENV
+          tar czf ../../../harrier-v${{ needs.create-release.outputs.version }}-${{ matrix.target }}.tar.gz harrier
         shell: bash
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/${{ env.RELEASE_BINARY }}
+      - name: Create archive (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          cd target/${{ matrix.target }}/release
+          Compress-Archive -Path harrier.exe -DestinationPath ../../../harrier-v${{ needs.create-release.outputs.version }}-${{ matrix.target }}.zip
 
-  release:
-    name: Create GitHub Release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
+      - name: Generate checksum (Unix)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          shasum -a 256 harrier-v${{ needs.create-release.outputs.version }}-${{ matrix.target }}.tar.gz > \
+            harrier-v${{ needs.create-release.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+      - name: Generate checksum (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $hash = Get-FileHash -Algorithm SHA256 harrier-v${{ needs.create-release.outputs.version }}-${{ matrix.target }}.zip
+          "$($hash.Hash.ToLower())  harrier-v${{ needs.create-release.outputs.version }}-${{ matrix.target }}.zip" | `
+            Out-File -FilePath harrier-v${{ needs.create-release.outputs.version }}-${{ matrix.target }}.zip.sha256 -Encoding ASCII
 
-      - name: Display artifact structure
-        run: ls -R artifacts
-
-      - name: Create GitHub Release
+      - name: Upload archive
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/**/*
-          generate_release_notes: true
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          files: |
+            harrier-v${{ needs.create-release.outputs.version }}-${{ matrix.target }}.${{ matrix.archive }}
+            harrier-v${{ needs.create-release.outputs.version }}-${{ matrix.target }}.${{ matrix.archive }}.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

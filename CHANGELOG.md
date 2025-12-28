@@ -8,38 +8,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **CLI Redesign**: Consolidated 8 commands into 6 workflow-oriented commands
+  - New `analyze` command with `--focus` flags (stats, security, auth, map, api) and `--all`
+  - New `capture` command combining browser (default) and proxy (`--proxy`) modes
+  - New `export` command for generating configs (`--hawkscan`)
+- **Target URL Metadata**: `--url` value stored in HAR as `_harrier` metadata
+  - Ensures accurate primary host detection in analysis
+  - Handles URLs with or without scheme (`app.example.com` works)
+  - User guidance hints when `--url` not specified
 - **Shell Completions**: Tab completion support for Bash, Zsh, Fish, and PowerShell
   - New `harrier completion --shell <SHELL>` command generates completion scripts
-  - Comprehensive help in `completion --help` shows installation for all shells
   - Intelligent value hints for file paths, URLs, hostnames, and command-specific values
-  - Simple, `gh`-style interface for ease of use
 - **Profile Management**: New `harrier profile` command with `list`, `info`, `delete`, and `clean` subcommands
-- **Profile Commands**:
-  - `profile list` - List all Chrome profiles with sizes
-  - `profile info <name>` - Show detailed profile information
-  - `profile delete <name>` - Delete a profile (with confirmation)
-  - `profile clean` - Clear cache from profiles while preserving cookies/extensions
 - **Persistent Default Profile**: Default profile now persists at `~/.harrier/profiles/default`
   - Retains logins, extensions, cookies, and settings between runs
   - Cache cleared on every startup via CDP
-- **`--temp` Flag**: New flag for `chrome` command to use temporary profiles
-  - Temporary profiles auto-delete after Chrome closes
-  - Takes precedence over `--profile` flag with warning message
-- **First-Run Experience**: Informative message when default profile is created
-- **Profile Size Warnings**: Warnings when profiles exceed 1GB in `profile list`
+- **`--temp` Flag**: New flag for `capture` command to use temporary profiles
 - **CDP-based Cache Clearing**: Browser cache cleared on every Chrome launch via CDP
 - **CDP-based Navigation**: URLs navigated via CDP after cache clear for reliable capture
-- **Longer CDP Connection Timeout**: Increased from 5 to 20 retry attempts (2.5s → 10s total)
 
 ### Changed
-- **BREAKING**: Default `chrome` command behavior changed from temporary to persistent profile
-  - Previous behavior: `harrier chrome` used temporary profile (auto-deleted)
-  - New behavior: `harrier chrome` uses persistent `default` profile
-  - **Migration**: Use `harrier chrome --temp` for old temporary profile behavior
+- **BREAKING**: Commands consolidated - scripts will need updates:
+  | Old Command | New Command |
+  |-------------|-------------|
+  | `harrier stats <FILE>` | `harrier analyze <FILE>` or `--focus stats` |
+  | `harrier discover <FILE>` | `harrier analyze <FILE> --focus api` |
+  | `harrier security <FILE>` | `harrier analyze <FILE> --focus security` |
+  | `harrier auth <FILE>` | `harrier analyze <FILE> --focus auth` |
+  | `harrier map <FILE>` | `harrier analyze <FILE> --focus map` |
+  | `harrier chrome` | `harrier capture` |
+  | `harrier proxy` | `harrier capture --proxy` |
+  | `harrier config <FILE>` | `harrier export <FILE> --hawkscan` |
+- **Simplified Help Text**: Single-line-per-option format for all commands
+- **Strict `--format` Handling**: Invalid format values now error instead of silently defaulting
 - **Chrome Launcher**: Always launches to `about:blank`, navigation happens via CDP
 - **Profile Storage**: All profiles stored in `~/.harrier/profiles/` directory
 
 ### Fixed
+- **IP-based Captures**: `get_root_domain()` now returns IPs as-is instead of truncating
+- **Primary Host Detection**: Filters out `chrome-extension://`, `data:`, and localhost URLs
+- **Duplicate HAR Parsing**: Stats now reads file once and shares across analyses
 - Chrome launch reliability on resource-constrained systems with longer timeout
 - First page load now always captured in HAR (cache cleared before navigation)
 
