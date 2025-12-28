@@ -8,6 +8,13 @@ use std::io::Write;
 use std::path::Path;
 use url::Url;
 
+/// Export format type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportType {
+    HawkScan,
+    // Future: OpenAPI, Postman, Curl
+}
+
 /// Configuration for a single host
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct HostConfig {
@@ -76,7 +83,7 @@ fn detect_auth_method(entries: &[&Entry]) -> Option<AuthMethod> {
 }
 
 /// Determine if a host is typically scannable
-fn is_scannable_host(host: &str, _role: Option<&str>) -> bool {
+fn is_scannable_host(host: &str) -> bool {
     let host_lower = host.to_lowercase();
 
     // OAuth/IdP providers are usually not scanned
@@ -296,7 +303,7 @@ fn build_host_configs(
 
         // Skip non-scannable hosts unless --all-hosts or it's the primary
         let role = infer_role(domain);
-        let is_scannable = is_scannable_host(domain, role);
+        let is_scannable = is_scannable_host(domain);
 
         if !all_hosts && !is_primary && !is_scannable {
             continue;
@@ -348,6 +355,19 @@ fn build_host_configs(
 
 pub fn execute(
     file: &Path,
+    export_type: ExportType,
+    host_filter: Option<&str>,
+    all_hosts: bool,
+    output_file: Option<std::path::PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    match export_type {
+        ExportType::HawkScan => execute_hawkscan(file, host_filter, all_hosts, output_file, format),
+    }
+}
+
+fn execute_hawkscan(
+    file: &Path,
     host_filter: Option<&str>,
     all_hosts: bool,
     output_file: Option<std::path::PathBuf>,
@@ -355,6 +375,12 @@ pub fn execute(
 ) -> Result<()> {
     let har = HarReader::from_file(file)?;
     let configs = build_host_configs(&har, file, host_filter, all_hosts);
+
+    if configs.is_empty() {
+        println!("No scannable hosts found in HAR file.");
+        println!("Use --all-hosts to include all hosts, or check the HAR file contents.");
+        return Ok(());
+    }
 
     let output = match format {
         OutputFormat::Json => format_json(&configs)?,

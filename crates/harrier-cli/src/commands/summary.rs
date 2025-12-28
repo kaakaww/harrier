@@ -368,18 +368,14 @@ fn output_pretty(summary: &HarSummary, file: &Path) -> Result<()> {
     }
 
     // Next steps
-    println!("\n{}", style("Commands").dim());
+    println!("\n{}", style("Next Steps").dim());
     println!(
-        "  {} for architecture diagram",
-        style(format!("harrier map {}", file.display())).cyan()
+        "  {} for detailed analysis",
+        style(format!("harrier analyze {} --all", file.display())).cyan()
     );
     println!(
-        "  {} for auth flow details",
-        style(format!("harrier auth {}", file.display())).cyan()
-    );
-    println!(
-        "  {} for HawkScan snippets",
-        style(format!("harrier config {}", file.display())).cyan()
+        "  {} for HawkScan config",
+        style(format!("harrier export {} --hawkscan", file.display())).cyan()
     );
 
     println!();

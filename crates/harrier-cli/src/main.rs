@@ -9,8 +9,14 @@ use std::path::PathBuf;
 #[command(author, version, about, long_about = None)]
 #[command(
     about = "CLI tool for working with HTTP Archive (HAR) files",
-    long_about = "Harrier analyzes, filters, and modifies HAR files for security testing and API discovery.\n\n\
-                  Quick start: harrier <file.har> for a summary of any HAR file."
+    long_about = "Harrier analyzes, filters, and captures HAR files for security testing and API discovery.\n\n\
+                  Quick start: harrier <file.har> for a summary of any HAR file.",
+    after_help = "EXAMPLES:\n  \
+        harrier app.har                              Quick summary\n  \
+        harrier capture --url https://example.com    Capture with Chrome\n  \
+        harrier analyze app.har --all                Full analysis\n  \
+        harrier export app.har --hawkscan            Generate HawkScan config\n\n\
+        Documentation: https://github.com/kaakaww/harrier"
 )]
 pub struct Cli {
     /// HAR file to analyze (shows quick summary)
@@ -31,64 +37,111 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Show architecture map with host relationships and API types
-    Map {
+    /// Analyze HAR for security, auth, APIs, and architecture
+    #[command(
+        long_about = "Analyze a HAR file for security issues, authentication patterns, API types, and host architecture.\n\n\
+                      By default, shows a summary. Use --focus to analyze specific areas, or --all for everything."
+    )]
+    Analyze {
         /// HAR file to analyze
         #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         file: PathBuf,
 
-        /// Override primary target detection
-        #[arg(long, value_hint = ValueHint::Hostname)]
-        target: Option<String>,
+        /// Focus on specific analysis areas (can be repeated)
+        #[arg(long, value_enum)]
+        focus: Vec<commands::analyze::Focus>,
 
-        /// Show all hosts without grouping
+        /// Run all analysis types
         #[arg(long)]
         all: bool,
+
+        /// Scope analysis to specific host
+        #[arg(long, value_hint = ValueHint::Hostname)]
+        host: Option<String>,
     },
 
-    /// Analyze authentication flows and session handling
-    Auth {
-        /// HAR file to analyze
+    /// Capture HTTP traffic via browser or proxy
+    #[command(long_about = "Capture HTTP traffic to generate HAR files.\n\n\
+                      By default, uses Chrome with DevTools Protocol (recommended for SPAs and sites requiring login).\n\
+                      Use --proxy to start a MITM proxy instead (better for mobile apps and any HTTP client).")]
+    Capture {
+        /// Use MITM proxy instead of browser
+        #[arg(long)]
+        proxy: bool,
+
+        /// Output HAR file
+        #[arg(short, long, default_value = "captured.har", value_hint = ValueHint::FilePath)]
+        output: PathBuf,
+
+        /// Filter captured traffic to specific hosts (supports globs, repeatable)
+        #[arg(long, value_hint = ValueHint::Hostname)]
+        hosts: Vec<String>,
+
+        /// Show HawkScan guidance after capture
+        #[arg(long)]
+        hawkscan: bool,
+
+        // Browser-specific options
+        /// Starting URL to navigate to (browser mode)
+        #[arg(long, value_hint = ValueHint::Url)]
+        url: Option<String>,
+
+        /// Use named persistent profile (browser mode)
+        #[arg(long, value_hint = ValueHint::Other)]
+        profile: Option<String>,
+
+        /// Use temporary profile (browser mode)
+        #[arg(long)]
+        temp: bool,
+
+        /// Override Chrome binary location (browser mode)
+        #[arg(long, value_hint = ValueHint::FilePath)]
+        chrome_path: Option<PathBuf>,
+
+        // Proxy-specific options
+        /// Port to listen on (proxy mode)
+        #[arg(short = 'p', long, default_value = "8080")]
+        port: u16,
+
+        /// Custom CA certificate path (proxy mode)
+        #[arg(long, value_hint = ValueHint::FilePath)]
+        cert: Option<PathBuf>,
+
+        /// Custom CA private key path (proxy mode)
+        #[arg(long, value_hint = ValueHint::FilePath)]
+        key: Option<PathBuf>,
+    },
+
+    /// Generate configs and reports from HAR data
+    #[command(long_about = "Export HAR analysis to various formats.\n\n\
+                      Currently supports HawkScan configuration generation.")]
+    Export {
+        /// HAR file to export from
         #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         file: PathBuf,
 
-        /// Analyze specific host (default: primary)
+        /// Generate HawkScan YAML configuration
+        #[arg(long)]
+        hawkscan: bool,
+
+        /// Scope export to specific host
         #[arg(long, value_hint = ValueHint::Hostname)]
         host: Option<String>,
 
-        /// Show all detected auth flows
-        #[arg(long)]
-        flows: bool,
-
-        /// Show detailed JWT token analysis
-        #[arg(long)]
-        jwt: bool,
-
-        /// Show security findings only
-        #[arg(long)]
-        security: bool,
-    },
-
-    /// Generate HawkScan configuration snippets
-    Config {
-        /// HAR file to analyze
-        #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
-        file: PathBuf,
-
-        /// Generate config for specific host only
-        #[arg(long, value_hint = ValueHint::Hostname)]
-        host: Option<String>,
-
-        /// Generate configs for all scannable hosts
+        /// Include all hosts (even non-scannable ones)
         #[arg(long)]
         all_hosts: bool,
 
-        /// Write to file instead of stdout
+        /// Write output to file
         #[arg(short, long, value_hint = ValueHint::FilePath)]
         output: Option<PathBuf>,
     },
 
     /// Filter HAR entries by criteria
+    #[command(
+        long_about = "Filter HAR file entries by host, status code, method, or content type.\n\n\
+                      Outputs filtered HAR to stdout (or file with -o)."
+    )]
     Filter {
         /// HAR file to filter
         #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
@@ -115,57 +168,7 @@ enum Commands {
         output: Option<PathBuf>,
     },
 
-    /// Start MITM proxy to capture HAR traffic
-    Proxy {
-        /// Port to listen on
-        #[arg(short, long, default_value = "8080")]
-        port: u16,
-
-        /// Output HAR file
-        #[arg(short, long, default_value = "captured.har", value_hint = ValueHint::FilePath)]
-        output: PathBuf,
-
-        /// Certificate path (uses ~/.harrier/ca.crt if not specified)
-        #[arg(long, value_hint = ValueHint::FilePath)]
-        cert: Option<PathBuf>,
-
-        /// Private key path (uses ~/.harrier/ca.key if not specified)
-        #[arg(long, value_hint = ValueHint::FilePath)]
-        key: Option<PathBuf>,
-    },
-
-    /// Launch Chrome and capture HAR traffic
-    Chrome {
-        /// Output HAR file
-        #[arg(short, long, default_value = "chrome-capture.har", value_hint = ValueHint::FilePath)]
-        output: PathBuf,
-
-        /// Filter to specific hosts (supports globs, repeatable)
-        #[arg(long, value_hint = ValueHint::Hostname)]
-        hosts: Vec<String>,
-
-        /// Print HawkScan configuration guidance after capture
-        #[arg(long)]
-        hawkscan: bool,
-
-        /// Override Chrome binary location
-        #[arg(long, value_hint = ValueHint::FilePath)]
-        chrome_path: Option<PathBuf>,
-
-        /// Starting URL to navigate to
-        #[arg(long, value_hint = ValueHint::Url)]
-        url: Option<String>,
-
-        /// Use named persistent profile at ~/.harrier/profiles/<NAME>
-        #[arg(long, value_hint = ValueHint::Other)]
-        profile: Option<String>,
-
-        /// Use temporary profile (auto-deleted after use)
-        #[arg(long)]
-        temp: bool,
-    },
-
-    /// Manage Chrome profiles
+    /// Manage Chrome profiles for capture
     Profile {
         #[command(subcommand)]
         command: ProfileCommands,
@@ -246,22 +249,68 @@ fn main() -> Result<()> {
 
     // Execute subcommand
     match cli.command {
-        Some(Commands::Map { file, target, all }) => {
-            commands::map::execute(&file, target.as_deref(), all, cli.format)
-        }
-        Some(Commands::Auth {
+        Some(Commands::Analyze {
             file,
+            focus,
+            all,
             host,
-            flows,
-            jwt,
-            security,
-        }) => commands::auth::execute(&file, host.as_deref(), flows, jwt, security, cli.format),
-        Some(Commands::Config {
+        }) => commands::analyze::execute(&file, focus, all, host.as_deref(), cli.format),
+
+        Some(Commands::Capture {
+            proxy,
+            output,
+            hosts,
+            hawkscan,
+            url,
+            profile,
+            temp,
+            chrome_path,
+            port,
+            cert,
+            key,
+        }) => {
+            let mode = if proxy {
+                commands::capture::CaptureMode::Proxy
+            } else {
+                commands::capture::CaptureMode::Browser
+            };
+            commands::capture::execute(
+                mode,
+                &output,
+                hosts,
+                hawkscan,
+                url,
+                profile,
+                temp,
+                chrome_path,
+                port,
+                cert,
+                key,
+            )
+        }
+
+        Some(Commands::Export {
             file,
+            hawkscan,
             host,
             all_hosts,
             output,
-        }) => commands::config::execute(&file, host.as_deref(), all_hosts, output, cli.format),
+        }) => {
+            if !hawkscan {
+                // Default to hawkscan if no export type specified
+                // In the future, we'll require one of the export type flags
+                eprintln!("Note: No export type specified, defaulting to --hawkscan");
+            }
+            commands::export::execute(
+                &file,
+                commands::export::ExportType::HawkScan,
+                host.as_deref(),
+                all_hosts,
+                output,
+                cli.format,
+            )
+        }
+
         Some(Commands::Filter {
             file,
             hosts,
@@ -269,32 +318,28 @@ fn main() -> Result<()> {
             method,
             content_type,
             output,
-        }) => commands::filter::execute(&file, hosts, status, method, content_type, output),
-        Some(Commands::Proxy {
-            port,
-            output,
-            cert,
-            key,
-        }) => commands::proxy::execute(port, &output, cert.as_deref(), key.as_deref()),
-        Some(Commands::Chrome {
-            output,
+        }) => commands::filter::execute(
+            &file,
             hosts,
-            hawkscan,
-            chrome_path,
-            url,
-            profile,
-            temp,
-        }) => commands::chrome::execute(&output, hosts, hawkscan, chrome_path, url, profile, temp),
+            status,
+            method,
+            content_type,
+            output,
+            cli.format,
+        ),
+
         Some(Commands::Profile { command }) => match command {
             ProfileCommands::List => commands::profile::list(),
             ProfileCommands::Info { name } => commands::profile::info(&name),
             ProfileCommands::Delete { name, force } => commands::profile::delete(&name, force),
             ProfileCommands::Clean { profile } => commands::profile::clean(profile.as_deref()),
         },
+
         Some(Commands::Completion { shell }) => {
             let mut cmd = Cli::command();
             commands::completion::execute(shell, &mut cmd)
         }
+
         None => {
             // No file and no command - show help
             Cli::command().print_help()?;
