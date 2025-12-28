@@ -23,7 +23,7 @@ fn test_export_command_help() {
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Export HAR analysis"))
+        .stdout(predicate::str::contains("Generate configs from HAR"))
         .stdout(predicate::str::contains("--hawkscan"))
         .stdout(predicate::str::contains("--host"))
         .stdout(predicate::str::contains("--all-hosts"))

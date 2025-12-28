@@ -23,7 +23,7 @@ fn test_analyze_command_help() {
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Analyze a HAR file"))
+        .stdout(predicate::str::contains("Analyze HAR"))
         .stdout(predicate::str::contains("--focus"))
         .stdout(predicate::str::contains("--all"))
         .stdout(predicate::str::contains("--host"));

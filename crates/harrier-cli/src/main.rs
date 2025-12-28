@@ -6,17 +6,15 @@ use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "harrier")]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about)]
 #[command(
-    about = "CLI tool for working with HTTP Archive (HAR) files",
-    long_about = "Harrier analyzes, filters, and captures HAR files for security testing and API discovery.\n\n\
-                  Quick start: harrier <file.har> for a summary of any HAR file.",
+    about = "Analyze, filter, and capture HTTP Archive (HAR) files",
     after_help = "EXAMPLES:\n  \
         harrier app.har                              Quick summary\n  \
         harrier capture --url https://example.com    Capture with Chrome\n  \
         harrier analyze app.har --all                Full analysis\n  \
         harrier export app.har --hawkscan            Generate HawkScan config\n\n\
-        Documentation: https://github.com/kaakaww/harrier"
+        Docs: https://github.com/kaakaww/harrier"
 )]
 pub struct Cli {
     /// HAR file to analyze (shows quick summary)
@@ -30,25 +28,21 @@ pub struct Cli {
     #[arg(short, long, global = true)]
     verbose: bool,
 
-    /// Output format
-    #[arg(short, long, global = true, default_value_t = OutputFormat::Pretty, value_enum)]
+    /// Output format: pretty, json, table [default: pretty]
+    #[arg(short, long, global = true, default_value_t = OutputFormat::Pretty, value_enum, hide_possible_values = true, hide_default_value = true)]
     format: OutputFormat,
 }
 
 #[derive(Subcommand)]
 enum Commands {
     /// Analyze HAR for security, auth, APIs, and architecture
-    #[command(
-        long_about = "Analyze a HAR file for security issues, authentication patterns, API types, and host architecture.\n\n\
-                      By default, shows a summary. Use --focus to analyze specific areas, or --all for everything."
-    )]
     Analyze {
         /// HAR file to analyze
         #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         file: PathBuf,
 
-        /// Focus on specific analysis areas (can be repeated)
-        #[arg(long, value_enum)]
+        /// Focus area: map, auth, security (repeatable)
+        #[arg(long, value_enum, hide_possible_values = true)]
         focus: Vec<commands::analyze::Focus>,
 
         /// Run all analysis types
@@ -60,20 +54,17 @@ enum Commands {
         host: Option<String>,
     },
 
-    /// Capture HTTP traffic via browser or proxy
-    #[command(long_about = "Capture HTTP traffic to generate HAR files.\n\n\
-                      By default, uses Chrome with DevTools Protocol (recommended for SPAs and sites requiring login).\n\
-                      Use --proxy to start a MITM proxy instead (better for mobile apps and any HTTP client).")]
+    /// Capture HTTP traffic via browser (default) or proxy
     Capture {
         /// Use MITM proxy instead of browser
         #[arg(long)]
         proxy: bool,
 
-        /// Output HAR file
-        #[arg(short, long, default_value = "captured.har", value_hint = ValueHint::FilePath)]
+        /// Output HAR file [default: captured.har]
+        #[arg(short, long, default_value = "captured.har", value_hint = ValueHint::FilePath, hide_default_value = true)]
         output: PathBuf,
 
-        /// Filter captured traffic to specific hosts (supports globs, repeatable)
+        /// Filter to specific hosts (globs supported, repeatable)
         #[arg(long, value_hint = ValueHint::Hostname)]
         hosts: Vec<String>,
 
@@ -81,7 +72,6 @@ enum Commands {
         #[arg(long)]
         hawkscan: bool,
 
-        // Browser-specific options
         /// Starting URL to navigate to (browser mode)
         #[arg(long, value_hint = ValueHint::Url)]
         url: Option<String>,
@@ -98,9 +88,8 @@ enum Commands {
         #[arg(long, value_hint = ValueHint::FilePath)]
         chrome_path: Option<PathBuf>,
 
-        // Proxy-specific options
-        /// Port to listen on (proxy mode)
-        #[arg(short = 'p', long, default_value = "8080")]
+        /// Port to listen on (proxy mode) [default: 8080]
+        #[arg(short = 'p', long, default_value = "8080", hide_default_value = true)]
         port: u16,
 
         /// Custom CA certificate path (proxy mode)
@@ -112,9 +101,7 @@ enum Commands {
         key: Option<PathBuf>,
     },
 
-    /// Generate configs and reports from HAR data
-    #[command(long_about = "Export HAR analysis to various formats.\n\n\
-                      Currently supports HawkScan configuration generation.")]
+    /// Generate configs from HAR (currently: --hawkscan)
     Export {
         /// HAR file to export from
         #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
@@ -137,13 +124,9 @@ enum Commands {
         output: Option<PathBuf>,
     },
 
-    /// Filter HAR entries by criteria
-    #[command(
-        long_about = "Filter HAR file entries by host, status code, method, or content type.\n\n\
-                      Outputs filtered HAR to stdout (or file with -o)."
-    )]
+    /// Filter HAR entries by host, status, method, or content-type
     Filter {
-        /// HAR file to filter
+        /// HAR file to filter (use '-' for stdin)
         #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         file: PathBuf,
 
@@ -174,31 +157,10 @@ enum Commands {
         command: ProfileCommands,
     },
 
-    /// Generate shell completion scripts
-    #[command(long_about = "Generate shell completion scripts for your shell.\n\n\
-                     USAGE:\n  \
-                     harrier completion --shell <SHELL>\n\n\
-                     SUPPORTED SHELLS:\n  \
-                     bash, zsh, fish, powershell\n\n\
-                     INSTALLATION:\n\n\
-                     Bash:\n  \
-                     Add to ~/.bashrc:\n    \
-                     echo 'source <(harrier completion --shell bash)' >> ~/.bashrc\n    \
-                     source ~/.bashrc\n\n\
-                     Zsh:\n  \
-                     Add to ~/.zshrc:\n    \
-                     echo 'source <(harrier completion --shell zsh)' >> ~/.zshrc\n    \
-                     source ~/.zshrc\n\n\
-                     Fish:\n  \
-                     Save to completion directory:\n    \
-                     harrier completion --shell fish > ~/.config/fish/completions/harrier.fish\n\n\
-                     PowerShell:\n  \
-                     Add to your PowerShell profile:\n    \
-                     harrier completion --shell powershell >> $PROFILE\n    \
-                     Then restart PowerShell or run: . $PROFILE")]
+    /// Generate shell completions (bash, zsh, fish, powershell)
     Completion {
-        /// Shell to generate completions for
-        #[arg(long, value_enum, required = true)]
+        /// Shell: bash, zsh, fish, powershell
+        #[arg(long, value_enum, required = true, hide_possible_values = true)]
         shell: Shell,
     },
 }
@@ -228,7 +190,7 @@ enum ProfileCommands {
 
     /// Clear cache from profiles
     Clean {
-        /// Specific profile to clean (cleans all if not specified)
+        /// Specific profile to clean (cleans all if omitted)
         #[arg(long, value_hint = ValueHint::Other)]
         profile: Option<String>,
     },
