@@ -2,9 +2,7 @@ use crate::OutputFormat;
 use anyhow::Result;
 use clap::ValueEnum;
 use harrier_core::har::{Entry, Har, HarReader};
-use harrier_detectors::{
-    AppTypeDetector, AuthAnalysis, AuthAnalyzer, AuthMethod, AuthSummaryGenerator,
-};
+use harrier_detectors::{AppTypeDetector, AuthAnalyzer, AuthMethod};
 use std::collections::HashMap;
 use std::path::Path;
 use url::Url;
@@ -16,8 +14,6 @@ pub enum Focus {
     Map,
     /// Authentication analysis - methods, flows, sessions
     Auth,
-    /// Security findings - vulnerabilities, exposures
-    Security,
 }
 
 /// Host information for analysis
@@ -44,8 +40,6 @@ pub struct AnalysisResult {
     pub architecture: Option<ArchitectureAnalysis>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub authentication: Option<AuthenticationAnalysis>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub security: Option<SecurityAnalysis>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -71,21 +65,6 @@ pub struct AuthenticationAnalysis {
     pub methods: Vec<String>,
     pub flow_count: usize,
     pub jwt_count: usize,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct SecurityAnalysis {
-    pub critical_count: usize,
-    pub warning_count: usize,
-    pub info_count: usize,
-    pub findings: Vec<SecurityFinding>,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct SecurityFinding {
-    pub severity: String,
-    pub message: String,
-    pub count: usize,
 }
 
 /// Extract root domain using Public Suffix List
@@ -388,44 +367,6 @@ fn analyze_auth(har: &Har) -> Option<AuthenticationAnalysis> {
     })
 }
 
-/// Analyze security findings from auth analysis
-fn analyze_security(auth: &AuthAnalysis) -> SecurityAnalysis {
-    let summary = AuthSummaryGenerator::aggregate_security_findings(auth);
-
-    let mut findings: Vec<SecurityFinding> = Vec::new();
-
-    for finding in &summary.critical {
-        findings.push(SecurityFinding {
-            severity: "Critical".to_string(),
-            message: finding.message.clone(),
-            count: finding.count,
-        });
-    }
-
-    for finding in &summary.warnings {
-        findings.push(SecurityFinding {
-            severity: "Warning".to_string(),
-            message: finding.message.clone(),
-            count: finding.count,
-        });
-    }
-
-    for finding in &summary.info {
-        findings.push(SecurityFinding {
-            severity: "Info".to_string(),
-            message: finding.message.clone(),
-            count: finding.count,
-        });
-    }
-
-    SecurityAnalysis {
-        critical_count: summary.critical.len(),
-        warning_count: summary.warnings.len(),
-        info_count: summary.info.len(),
-        findings,
-    }
-}
-
 /// Format duration for display
 fn format_duration(start: &str, end: &str) -> String {
     use chrono::{DateTime, Utc};
@@ -492,7 +433,6 @@ pub fn execute(
     let run_all = all || focus.is_empty();
     let run_map = run_all || focus.contains(&Focus::Map);
     let run_auth = run_all || focus.contains(&Focus::Auth);
-    let run_security = run_all || focus.contains(&Focus::Security);
 
     // Build analysis result
     let file_name = file
@@ -516,19 +456,7 @@ pub fn execute(
         None
     };
 
-    let auth_analysis = if run_auth || run_security {
-        AuthAnalyzer::analyze(&har).ok()
-    } else {
-        None
-    };
-
     let authentication = if run_auth { analyze_auth(&har) } else { None };
-
-    let security = if run_security {
-        auth_analysis.as_ref().map(analyze_security)
-    } else {
-        None
-    };
 
     let result = AnalysisResult {
         file_name,
@@ -536,7 +464,6 @@ pub fn execute(
         time_range,
         architecture,
         authentication,
-        security,
     };
 
     match format {
@@ -647,60 +574,6 @@ fn output_pretty(result: &AnalysisResult, file: &Path, focus: &[Focus], all: boo
         }
     }
 
-    // Security section
-    if let Some(ref sec) = result.security {
-        println!("\n{}", style("Security").bold());
-
-        if sec.critical_count == 0 && sec.warning_count == 0 && sec.info_count == 0 {
-            println!("  {} No issues detected", style("[OK]").green());
-        } else {
-            if sec.critical_count > 0 {
-                println!(
-                    "  {} {} critical issues",
-                    style("[CRITICAL]").red().bold(),
-                    sec.critical_count
-                );
-            }
-            if sec.warning_count > 0 {
-                println!(
-                    "  {} {} warnings",
-                    style("[WARN]").yellow(),
-                    sec.warning_count
-                );
-            }
-            if sec.info_count > 0 {
-                println!(
-                    "  {} {} informational",
-                    style("[INFO]").dim(),
-                    sec.info_count
-                );
-            }
-
-            // Show details if focused on security
-            if all || focus.contains(&Focus::Security) {
-                println!();
-                for finding in sec.findings.iter().take(10) {
-                    let severity_style = match finding.severity.as_str() {
-                        "Critical" => style(&finding.severity).red().bold(),
-                        "Warning" => style(&finding.severity).yellow(),
-                        _ => style(&finding.severity).dim(),
-                    };
-                    println!(
-                        "  [{}] {} ({} occurrence{})",
-                        severity_style,
-                        finding.message,
-                        finding.count,
-                        if finding.count > 1 { "s" } else { "" }
-                    );
-                }
-
-                if sec.findings.len() > 10 {
-                    println!("  ... and {} more findings", sec.findings.len() - 10);
-                }
-            }
-        }
-    }
-
     // Next steps (only in summary mode)
     if focus.is_empty() && !all {
         println!("\n{}", style("Next Steps").dim());
@@ -711,14 +584,6 @@ fn output_pretty(result: &AnalysisResult, file: &Path, focus: &[Focus], all: boo
         println!(
             "  {} for auth flow details",
             style(format!("harrier analyze {} --focus auth", file.display())).cyan()
-        );
-        println!(
-            "  {} for security findings",
-            style(format!(
-                "harrier analyze {} --focus security",
-                file.display()
-            ))
-            .cyan()
         );
         println!(
             "  {} for everything",
@@ -783,17 +648,6 @@ fn output_table(result: &AnalysisResult) -> Result<()> {
         }
         println!("Flow Count,{}", auth.flow_count);
         println!("JWT Count,{}", auth.jwt_count);
-    }
-
-    if let Some(ref sec) = result.security {
-        println!();
-        println!("Severity,Finding,Count");
-        for finding in &sec.findings {
-            println!(
-                "{},\"{}\",{}",
-                finding.severity, finding.message, finding.count
-            );
-        }
     }
 
     Ok(())

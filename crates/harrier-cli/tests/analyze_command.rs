@@ -40,7 +40,6 @@ fn test_analyze_default_output() {
         .stdout(predicate::str::contains("Overview"))
         .stdout(predicate::str::contains("Architecture"))
         .stdout(predicate::str::contains("Authentication"))
-        .stdout(predicate::str::contains("Security"))
         .stdout(predicate::str::contains("Next Steps"));
 }
 
@@ -74,19 +73,6 @@ fn test_analyze_focus_auth() {
 }
 
 #[test]
-fn test_analyze_focus_security() {
-    let mut cmd = Command::new(get_harrier_bin());
-    cmd.arg("analyze")
-        .arg(get_sample_har())
-        .arg("--focus")
-        .arg("security");
-
-    cmd.assert()
-        .success()
-        .stdout(predicate::str::contains("Security"));
-}
-
-#[test]
 fn test_analyze_all_flag() {
     let mut cmd = Command::new(get_harrier_bin());
     cmd.arg("analyze").arg(get_sample_har()).arg("--all");
@@ -95,7 +81,6 @@ fn test_analyze_all_flag() {
         .success()
         .stdout(predicate::str::contains("Architecture"))
         .stdout(predicate::str::contains("Authentication"))
-        .stdout(predicate::str::contains("Security"))
         // --all should NOT show "Next Steps"
         .stdout(predicate::str::contains("Next Steps").not());
 }

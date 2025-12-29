@@ -41,7 +41,7 @@ enum Commands {
         #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         file: PathBuf,
 
-        /// Focus area: map, auth, security (repeatable)
+        /// Focus area: map, auth (repeatable)
         #[arg(long, value_enum, hide_possible_values = true)]
         focus: Vec<commands::analyze::Focus>,
 
