@@ -54,7 +54,7 @@ jobs:
         include:
           # macOS Intel
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-15-intel
             cross: false
             archive: tar.gz
 
