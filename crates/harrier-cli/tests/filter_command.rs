@@ -1,3 +1,4 @@
+use harrier_cli::OutputFormat;
 use harrier_core::har::HarReader;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -30,6 +31,7 @@ fn test_filter_exact_host_match() {
         None,
         None,
         Some(output.clone()),
+        OutputFormat::Json,
     );
 
     // Assert
@@ -62,6 +64,7 @@ fn test_filter_glob_pattern() {
         None,
         None,
         Some(output.clone()),
+        OutputFormat::Json,
     );
 
     // Assert
@@ -88,6 +91,7 @@ fn test_filter_multiple_hosts() {
         None,
         None,
         Some(output.clone()),
+        OutputFormat::Json,
     );
 
     // Assert
@@ -114,6 +118,7 @@ fn test_filter_comma_separated_hosts() {
         None,
         None,
         Some(output.clone()),
+        OutputFormat::Json,
     );
 
     // Assert
@@ -140,6 +145,7 @@ fn test_filter_status_code() {
         None,
         None,
         Some(output.clone()),
+        OutputFormat::Json,
     );
 
     // Assert
@@ -168,6 +174,7 @@ fn test_filter_combined_host_and_status() {
         None,
         None,
         Some(output.clone()),
+        OutputFormat::Json,
     );
 
     // Assert
@@ -198,6 +205,7 @@ fn test_filter_no_matches_returns_error() {
         None,
         None,
         Some(output.clone()),
+        OutputFormat::Json,
     );
 
     // Assert
@@ -231,6 +239,7 @@ fn test_filter_preserves_metadata() {
         None,
         None,
         Some(output.clone()),
+        OutputFormat::Json,
     );
 
     // Assert

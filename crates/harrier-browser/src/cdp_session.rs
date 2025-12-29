@@ -11,6 +11,7 @@ use chromiumoxide::cdp::browser_protocol::page::{EventLoadEventFired, NavigatePa
 use futures::StreamExt;
 use std::collections::HashMap;
 use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 
 /// Manages Chrome DevTools Protocol session
 pub struct CdpSession {
@@ -59,11 +60,27 @@ impl CdpSession {
 
         let (browser, mut handler) = self.connect().await?;
 
-        // Spawn handler task
+        // Create cancellation token for graceful shutdown
+        let cancel_token = CancellationToken::new();
+        let cancel_token_clone = cancel_token.clone();
+
+        // Spawn handler task with cancellation support
         let handler_task = tokio::spawn(async move {
-            while let Some(event) = handler.next().await {
-                if let Err(e) = event {
-                    tracing::debug!("CDP handler event error (continuing): {}", e);
+            loop {
+                tokio::select! {
+                    _ = cancel_token_clone.cancelled() => {
+                        tracing::debug!("CDP handler task cancelled gracefully");
+                        break;
+                    }
+                    event = handler.next() => {
+                        match event {
+                            Some(Ok(_)) => {}
+                            Some(Err(e)) => {
+                                tracing::debug!("CDP handler event error (continuing): {}", e);
+                            }
+                            None => break,
+                        }
+                    }
                 }
             }
         });
@@ -79,20 +96,23 @@ impl CdpSession {
         };
 
         // Clear cache
-        match page.execute(ClearBrowserCacheParams::default()).await {
+        let result = match page.execute(ClearBrowserCacheParams::default()).await {
             Ok(_) => {
                 tracing::info!("Browser cache cleared successfully");
-                handler_task.abort();
                 Ok(())
             }
-            Err(e) => {
-                handler_task.abort();
-                Err(crate::Error::Cdp(format!(
-                    "Failed to clear browser cache: {}",
-                    e
-                )))
-            }
-        }
+            Err(e) => Err(crate::Error::Cdp(format!(
+                "Failed to clear browser cache: {}",
+                e
+            ))),
+        };
+
+        // Gracefully shutdown handler task
+        cancel_token.cancel();
+        // Give the task a moment to cleanup
+        let _ = tokio::time::timeout(std::time::Duration::from_millis(100), handler_task).await;
+
+        result
     }
 
     /// Navigate to a URL
@@ -108,11 +128,27 @@ impl CdpSession {
 
         let (browser, mut handler) = self.connect().await?;
 
-        // Spawn handler task
+        // Create cancellation token for graceful shutdown
+        let cancel_token = CancellationToken::new();
+        let cancel_token_clone = cancel_token.clone();
+
+        // Spawn handler task with cancellation support
         let handler_task = tokio::spawn(async move {
-            while let Some(event) = handler.next().await {
-                if let Err(e) = event {
-                    tracing::debug!("CDP handler event error (continuing): {}", e);
+            loop {
+                tokio::select! {
+                    _ = cancel_token_clone.cancelled() => {
+                        tracing::debug!("CDP handler task cancelled gracefully");
+                        break;
+                    }
+                    event = handler.next() => {
+                        match event {
+                            Some(Ok(_)) => {}
+                            Some(Err(e)) => {
+                                tracing::debug!("CDP handler event error (continuing): {}", e);
+                            }
+                            None => break,
+                        }
+                    }
                 }
             }
         });
@@ -136,7 +172,7 @@ impl CdpSession {
             .build()
             .map_err(|e| crate::Error::Cdp(format!("Failed to build navigate params: {}", e)))?;
 
-        match page.execute(navigate_params).await {
+        let result = match page.execute(navigate_params).await {
             Ok(_) => {
                 tracing::info!("Navigation initiated to {}", normalized_url);
 
@@ -147,11 +183,9 @@ impl CdpSession {
                 tokio::select! {
                     _ = load_events.next() => {
                         tracing::info!("Page loaded successfully");
-                        handler_task.abort();
                         Ok(())
                     }
                     _ = &mut timeout => {
-                        handler_task.abort();
                         Err(crate::Error::Cdp(format!(
                             "Navigation timeout after 30 seconds for {}",
                             normalized_url
@@ -159,14 +193,18 @@ impl CdpSession {
                     }
                 }
             }
-            Err(e) => {
-                handler_task.abort();
-                Err(crate::Error::Cdp(format!(
-                    "Failed to navigate to {}: {}",
-                    normalized_url, e
-                )))
-            }
-        }
+            Err(e) => Err(crate::Error::Cdp(format!(
+                "Failed to navigate to {}: {}",
+                normalized_url, e
+            ))),
+        };
+
+        // Gracefully shutdown handler task
+        cancel_token.cancel();
+        // Give the task a moment to cleanup
+        let _ = tokio::time::timeout(std::time::Duration::from_millis(100), handler_task).await;
+
+        result
     }
 
     /// Connect to Chrome and capture network traffic
@@ -185,13 +223,29 @@ impl CdpSession {
         // Connect to Chrome via CDP
         let (browser, mut handler) = self.connect().await?;
 
+        // Create cancellation token for graceful shutdown of handler task
+        let handler_cancel_token = CancellationToken::new();
+        let handler_cancel_clone = handler_cancel_token.clone();
+
         // Spawn handler task IMMEDIATELY to process CDP protocol messages
         // This must run for browser.pages() and other commands to work
-        let handler_task = tokio::spawn(async move {
-            while let Some(event) = handler.next().await {
-                if let Err(e) = event {
-                    // Log but don't stop - some CDP events may not be fully parseable
-                    tracing::debug!("CDP handler event error (continuing): {}", e);
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = handler_cancel_clone.cancelled() => {
+                        tracing::debug!("CDP handler task cancelled gracefully");
+                        break;
+                    }
+                    event = handler.next() => {
+                        match event {
+                            Some(Ok(_)) => {}
+                            Some(Err(e)) => {
+                                // Log but don't stop - some CDP events may not be fully parseable
+                                tracing::debug!("CDP handler event error (continuing): {}", e);
+                            }
+                            None => break,
+                        }
+                    }
                 }
             }
         });
@@ -309,9 +363,9 @@ impl CdpSession {
                 }
             }
 
-            // Send the capture back and cleanup
+            // Send the capture back and gracefully shutdown handler task
             let _ = result_tx.send(capture);
-            handler_task.abort();
+            handler_cancel_token.cancel();
         });
 
         Ok((shutdown_tx, result_rx))

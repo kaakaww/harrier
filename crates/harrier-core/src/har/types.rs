@@ -18,6 +18,23 @@ pub struct Log {
     pub entries: Vec<Entry>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
+    /// Harrier-specific metadata (custom HAR extension)
+    #[serde(rename = "_harrier", skip_serializing_if = "Option::is_none")]
+    pub harrier_metadata: Option<HarrierMetadata>,
+}
+
+/// Harrier-specific metadata stored in HAR files
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct HarrierMetadata {
+    /// The target URL specified via --url during capture
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_url: Option<String>,
+    /// The target host extracted from target_url
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_host: Option<String>,
+    /// Capture mode used (browser or proxy)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capture_mode: Option<String>,
 }
 
 /// Creator/Browser information

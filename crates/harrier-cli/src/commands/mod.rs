@@ -1,8 +1,7 @@
-pub mod chrome;
+pub mod analyze;
+pub mod capture;
 pub mod completion;
-pub mod discover;
+pub mod export;
 pub mod filter;
 pub mod profile;
-pub mod proxy;
-pub mod security;
-pub mod stats;
+pub mod summary;

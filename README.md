@@ -1,388 +1,277 @@
 # Harrier
 
-A command-line tool for analyzing, filtering, and working with HTTP Archive (HAR) files.
+[![Release](https://img.shields.io/github/v/release/kaakaww/harrier)](https://github.com/kaakaww/harrier/releases)
+
+A CLI tool for analyzing, filtering, and capturing HTTP Archive (HAR) files.
 
 ## Overview
 
-Harrier makes working with HAR files easier, especially for security testing with [StackHawk](https://www.stackhawk.com/) and HawkScan. It provides fast analysis, flexible filtering, and security insights for HTTP traffic captured in HAR format.
-
-## Features
-
-- **Stats** - Analyze HAR files with traffic statistics, performance metrics, and host analysis
-- **Filter** - Extract specific traffic by host, status code, method, or content type
-- **Proxy** - Capture HTTP/HTTPS traffic in real-time with MITM proxy
-- **Chrome** - Launch Chrome and capture network traffic via Chrome DevTools Protocol
-- **Security** _(Coming Soon)_ - Detect authentication patterns and scan for sensitive data
-- **Discover** _(Coming Soon)_ - Identify API types (REST, GraphQL, gRPC, WebSocket, etc.) and endpoints
+Harrier is a command-line interface tool for working with HTTP Archive (HAR) files. It provides utilities to collect, analyze, and modify HAR files. The goal of the project is to make it easier to work with HTTP traffic data for analysis and security testing.
 
 ## Installation
+
+Download the latest release for your platform from [Releases](https://github.com/kaakaww/harrier/releases). Or, install from source with Cargo:
 
 ```bash
 # From source
 cargo install --path .
-
-# Or run directly
-cargo run -- [command] [args]
 ```
 
-## Shell Completions
+## Prerequisites
 
-Harrier supports tab completion for Bash, Zsh, Fish, and PowerShell.
+- **Chrome or Chromium** - Required for `harrier capture` browser mode. Harrier auto-detects Chrome in standard locations. Use `--chrome-path` to specify a custom location.
 
-### Setup
-
-For detailed installation instructions for all shells, run:
-```bash
-harrier completion --help
-```
-
-### Quick Installation
-
-**Bash:**
-```bash
-echo 'source <(harrier completion --shell bash)' >> ~/.bashrc
-source ~/.bashrc
-```
-
-**Zsh:**
-```bash
-echo 'source <(harrier completion --shell zsh)' >> ~/.zshrc
-source ~/.zshrc
-```
-
-**Fish:**
-```bash
-harrier completion --shell fish > ~/.config/fish/completions/harrier.fish
-```
-
-**PowerShell:**
-```powershell
-harrier completion --shell powershell >> $PROFILE
-. $PROFILE
-```
-
-### What Gets Completed
-
-- **Commands**: `stats`, `filter`, `security`, `discover`, `proxy`, `chrome`, `profile`, `completion`
-- **Subcommands**: `profile list`, `profile info`, `profile delete`, `profile clean`
-- **Flags**: All command-specific flags and options
-- **File paths**: Intelligent file/directory completion for HAR files and paths
-- **URLs**: Context-aware URL completion for `--url` flags
-- **Hosts**: Hostname completion for `--hosts` flags
-- **Values**: Smart completion hints for HTTP methods, status codes, content types, and profile names
-
-## Usage
-
-### Stats Command
-
-Analyze HAR file contents and generate traffic statistics:
+## Quick Start
 
 ```bash
-# Basic statistics
-harrier stats traffic.har
+# Display help
+harrier --help
 
-# With detailed timing information
-harrier stats traffic.har --timings
+# Quick summary of any HAR file
+harrier app.har
 
-# Show all hosts with request counts
-harrier stats traffic.har --hosts
+# Capture traffic from Chrome
+harrier capture --url https://example.com
 
-# Show authentication analysis
-harrier stats traffic.har --auth
+# Full analysis
+harrier analyze app.har --all
 
-# All details
-harrier stats traffic.har --verbose
+# Generate HawkScan config
+harrier export app.har --hawkscan
 ```
 
-### Filter Command
+## Commands
+
+### `harrier <FILE>` - Quick Summary
+
+Show a quick overview of any HAR file:
+
+```bash
+harrier traffic.har
+```
+
+### `harrier analyze` - Analyze HAR Files
+
+Analyze HAR files for security, authentication, and architecture:
+
+```bash
+# Summary (default)
+harrier analyze app.har
+
+# Focus on specific areas
+harrier analyze app.har --focus map       # Architecture/hosts
+harrier analyze app.har --focus auth      # Authentication patterns
+
+# Multiple focus areas
+harrier analyze app.har --focus map --focus auth
+
+# Everything
+harrier analyze app.har --all
+
+# Scope to a specific host
+harrier analyze app.har --host api.example.com
+
+# Output formats
+harrier analyze app.har --format json
+harrier analyze app.har --format table
+```
+
+#### Authentication Analysis (`--focus auth`)
+
+Deep analysis of authentication and authorization:
+
+```bash
+harrier analyze app.har --focus auth
+```
+
+Detects:
+- **Auth Providers**: Microsoft Entra, Auth0, Okta, Google, AWS Cognito, Firebase, Keycloak
+- **OAuth Flows**: Authorization code, token exchange, refresh patterns
+- **Credentials**: Traces cookies and headers back to their origin endpoints
+- **JWT Details**: Algorithm, issuer, audience, claims (email, roles, scope)
+- **Security Issues**: Missing cookie attributes (HttpOnly, Secure, SameSite)
+
+Example output:
+```
+Authentication
+  Provider:     Microsoft Entra
+                login.microsoftonline.com (3rd party)
+  Method:       OAuth 2.0 Authorization Code
+
+Authorization
+  Session Cookies:
+    auth-token           HttpOnly, Secure
+      ⚠ Missing SameSite attribute
+
+  Credential Sources:
+    Cookie auth-token [JWT]  (45 requests)
+      ← POST 200 (Set-Cookie header)  https://api.example.com/login
+```
+
+### `harrier capture` - Capture Traffic
+
+Capture HTTP/HTTPS traffic via Chrome (default) or MITM proxy:
+
+```bash
+# Browser mode (default) - launches Chrome with DevTools Protocol
+harrier capture
+harrier capture --url https://example.com
+harrier capture --output session.har
+
+# Use a named profile (retains logins, cookies, extensions)
+harrier capture --profile my-app
+
+# Use temporary profile (auto-deleted after)
+harrier capture --temp
+
+# Proxy mode - start MITM proxy for mobile apps or any HTTP client
+harrier capture --proxy
+harrier capture --proxy --port 9090
+
+# Filter captured traffic to specific hosts
+harrier capture --host api.example.com
+harrier capture --host "*.example.com,*.cdn.com"
+
+# Show HawkScan guidance after capture
+harrier capture --hawkscan
+```
+
+**Browser mode** is best for SPAs and sites requiring login. **Proxy mode** is best for mobile apps and any HTTP client.
+
+#### Proxy Mode CA Certificate
+
+For HTTPS interception in proxy mode, Harrier generates a CA certificate at `~/.harrier/ca/`. To trust this certificate:
+
+- **macOS**: `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/.harrier/ca/harrier-ca.crt`
+- **Windows**: Import `harrier-ca.crt` via Certificate Manager (certmgr.msc)
+- **Linux**: Copy to `/usr/local/share/ca-certificates/` and run `sudo update-ca-certificates`
+
+See [docs/proxy-setup.md](docs/proxy-setup.md) for detailed instructions.
+
+### `harrier export` - Generate Configs
+
+Export HAR analysis to various formats:
+
+```bash
+# Generate HawkScan configuration
+harrier export app.har --hawkscan
+
+# Scope to specific host
+harrier export app.har --hawkscan --host api.example.com
+
+# Include all hosts (even non-scannable ones)
+harrier export app.har --hawkscan --all-hosts
+
+# Write to file
+harrier export app.har --hawkscan -o stackhawk.yml
+```
+
+### `harrier filter` - Filter HAR Entries
 
 Extract specific traffic from HAR files:
 
 ```bash
-# Filter to a single host
-harrier filter traffic.har --hosts api.example.com -o filtered.har
+# Filter by host (exact or glob)
+harrier filter traffic.har --host api.example.com
+harrier filter traffic.har --host "*.example.com"
 
-# Filter with glob patterns
-harrier filter traffic.har --hosts "*.example.com" -o filtered.har
+# Multiple hosts
+harrier filter traffic.har --host api.com --host cdn.com
+harrier filter traffic.har --host "api.com,cdn.com"
 
-# Multiple hosts (repeatable or comma-separated)
-harrier filter traffic.har --hosts api.com --hosts cdn.com -o filtered.har
-harrier filter traffic.har --hosts "api.com,cdn.com" -o filtered.har
+# Filter by status code
+harrier filter traffic.har --status 2xx
+harrier filter traffic.har --status 404
+harrier filter traffic.har --status 500-599
 
-# Filter by status codes
-harrier filter traffic.har --status 2xx -o success.har
-harrier filter traffic.har --status 404 -o notfound.har
+# Filter by method
+harrier filter traffic.har --method POST
 
 # Combined filters (AND logic)
-harrier filter traffic.har --hosts api.com --status 2xx --method POST
+harrier filter traffic.har --host api.com --status 2xx --method POST
 
-# Output to stdout for piping
-harrier filter traffic.har --hosts api.com | jq '.log.entries | length'
+# Output formats
+harrier filter traffic.har --host api.com                    # Pretty summary (default)
+harrier filter traffic.har --host api.com --format json      # Full HAR JSON
+harrier filter traffic.har --host api.com --format table     # CSV table
+harrier filter traffic.har --host api.com -o filtered.har    # Write to file
+
+# Read from stdin (for piping)
+cat traffic.har | harrier filter - --host api.com
 ```
 
-### Proxy Command
-
-Capture HTTP/HTTPS traffic in real-time using a Man-in-the-Middle (MITM) proxy:
+### `harrier profile` - Manage Chrome Profiles
 
 ```bash
-# Start proxy on default port 8080
-harrier proxy
-
-# Specify custom port and output file
-harrier proxy --port 3128 --output my-traffic.har
-
-# Use custom CA certificate
-harrier proxy --cert /path/to/ca.crt --key /path/to/ca.key
+harrier profile list                    # List all profiles
+harrier profile info my-app             # Show profile details
+harrier profile delete old-profile      # Delete a profile
+harrier profile clean                   # Clear cache from all profiles
+harrier profile clean --profile my-app  # Clear cache from specific profile
 ```
 
-**How it works:**
-
-1. Start the proxy with `harrier proxy`
-2. The first time you run it, a CA certificate will be generated at `~/.harrier/ca.crt`
-3. **Install the CA certificate** in your system's trust store (see [Proxy Setup Guide](docs/proxy-setup.md))
-4. Configure your browser or application to use the proxy (e.g., `localhost:8080`)
-5. Browse normally - all HTTP/HTTPS traffic will be captured
-6. Press `Ctrl+C` to stop the proxy and write the HAR file
-
-**Important:** You must install the CA certificate for HTTPS interception to work. Without it, browsers will show certificate errors. See the [Proxy Setup Guide](docs/proxy-setup.md) for detailed installation instructions for macOS, Linux, and Windows.
-
-**Post-capture analysis:**
+### `harrier completion` - Shell Completions
 
 ```bash
-# View captured traffic statistics
-harrier stats captured.har
+# Bash
+echo 'source <(harrier completion --shell bash)' >> ~/.bashrc
 
-# Filter to specific hosts
-harrier filter captured.har --hosts api.example.com -o filtered.har
+# Zsh
+echo 'source <(harrier completion --shell zsh)' >> ~/.zshrc
+
+# Fish
+harrier completion --shell fish > ~/.config/fish/completions/harrier.fish
+
+# PowerShell
+harrier completion --shell powershell >> $PROFILE
 ```
 
-### Chrome Command
+## Output Formats
 
-Launch Chrome in headed mode and capture network traffic directly via Chrome DevTools Protocol (CDP):
+All analysis commands support `--format`:
+
+| Format | Description |
+|--------|-------------|
+| `pretty` | Human-readable colored output (default) |
+| `json` | Machine-readable JSON |
+| `table` | CSV format for spreadsheets |
+
+## Integration with HawkScan
 
 ```bash
-# Basic usage - uses persistent default profile
-harrier chrome
+# Capture authenticated traffic and generate config
+harrier capture --url https://app.example.com \
+                --profile authenticated \
+                --host api.example.com \
+                --output api-traffic.har
 
-# Specify output file
-harrier chrome --output my-session.har
+# Generate HawkScan configuration
+harrier export api-traffic.har --hawkscan -o stackhawk.yml
 
-# Filter to specific hosts (supports globs)
-harrier chrome --hosts "api.example.com"
-harrier chrome --hosts "*.example.com,*.cdn.com"
-
-# Start at a specific URL (cache cleared, then navigates)
-harrier chrome --url "https://app.example.com"
-
-# Use a named persistent profile for saved sessions/cookies/extensions
-harrier chrome --profile my-app-testing
-
-# Use a temporary profile (auto-deleted after use)
-harrier chrome --temp
-
-# Override Chrome location if not auto-detected
-harrier chrome --chrome-path "/path/to/chrome"
-
-# Run StackHawk scan after capture
-harrier chrome --scan
-
-# Combined example
-harrier chrome --url "https://app.example.com" \
-               --hosts "*.example.com" \
-               --profile testing \
-               --output app-traffic.har \
-               --scan
+# Run scan
+hawk scan
 ```
-
-**Profile Behavior:**
-- **Default:** Uses persistent profile at `~/.harrier/profiles/default` (retains logins, extensions, cookies)
-- **Named (`--profile <name>`):** Uses persistent profile at `~/.harrier/profiles/<name>`
-- **Temporary (`--temp`):** Creates ephemeral profile that auto-deletes after Chrome closes
-- **Cache:** Browser cache is cleared on every run via CDP, but cookies/auth persist
-
-**How it works:**
-
-1. Harrier automatically detects your Chrome installation (macOS, Linux, Windows)
-2. Chrome launches in headed mode so you can interact normally
-3. Network traffic is captured via Chrome DevTools Protocol (CDP)
-4. Browse, interact with web apps, or test workflows
-5. When ready, press 's' to stop capture (Chrome continues), 'k' to kill Chrome and save, or close Chrome naturally
-6. Harrier saves the HAR file with all captured requests, responses, headers, and response bodies
-7. Response bodies larger than 15MB are automatically truncated for HawkScan compatibility
-8. Optionally filter traffic to specific hosts
-9. Optionally run StackHawk scan on the captured traffic
-
-**Interactive capture control:**
-
-When capturing traffic, you have three options:
-- **'s' key**: Stop capturing and save HAR (Chrome remains open)
-- **'k' key**: Kill Chrome and save HAR with captured traffic
-- **Close Chrome**: Naturally close Chrome to stop and save
-
-### Profile Management
-
-Manage Chrome profiles used for HAR capture:
-
-```bash
-# List all profiles with sizes
-harrier profile list
-
-# Show detailed information about a profile
-harrier profile info default
-harrier profile info my-app-testing
-
-# Delete a profile (requires confirmation)
-harrier profile delete old-profile
-
-# Delete default profile (requires --force)
-harrier profile delete default --force
-
-# Clear cache from all profiles (preserves cookies, extensions, etc.)
-harrier profile clean
-
-# Clear cache from specific profile
-harrier profile clean --profile my-app-testing
-```
-
-**Why use profiles?**
-- **Testing with authentication**: Login once, reuse credentials across captures
-- **Extension testing**: Install extensions in a profile, test with them enabled
-- **Isolating environments**: Separate profiles for dev, staging, production testing
-- **Clean slate testing**: Use `--temp` for reproducible, stateless captures
-
-**Response body capture:**
-
-- All response bodies are captured and included in HAR files
-- Bodies larger than 15MB are truncated to meet HawkScan's 16MB limit
-- Both text and binary content supported (base64 encoding for binary)
-- Truncation metadata is preserved in the HAR file
-
-**Integration with StackHawk:**
-
-```bash
-# Capture authenticated traffic, filter to API, and scan
-harrier chrome --url "https://app.example.com/login" \
-               --hosts "api.example.com" \
-               --profile authenticated \
-               --output api-traffic.har \
-               --scan
-```
-
-**Status:** ✅ Fully functional MVP - Chrome integration with complete network capture and response body support is complete and tested on macOS.
-
-## Coming Soon
-
-The following features are planned but not yet implemented:
-
-### Security Command
-Analyze authentication and security patterns:
-- Detect authentication methods (Basic, Bearer, JWT, OAuth, API Keys, Cookies)
-- Scan for sensitive data exposure
-- Identify insecure requests (HTTP, weak auth, etc.)
-
-### Discover Command
-Identify API types and discover endpoints:
-- Detect API types (REST, GraphQL, gRPC, WebSocket, SOAP, etc.)
-- Extract and list all endpoints
-- Generate OpenAPI specifications from traffic
-
-_Backend infrastructure for these features exists in the `harrier-detectors` crate and will be wired to CLI commands in a future release._
 
 ## Development
 
-### Building and Testing
-
 ```bash
-# Build (debug mode)
-make build
-cargo build
-
-# Build (release mode)
-make release-build
-cargo build --release
-
-# Run all tests
-make test
-cargo test --all
-
-# Run linting (clippy + rustfmt)
-make lint
-cargo clippy --all-targets --all-features -- -D warnings
-cargo fmt -- --check
-
-# Format code
-cargo fmt
-
-# Clean build artifacts
-make clean
-cargo clean
-
-# Install locally
-make install
-cargo install --path .
+make build          # Build (debug)
+make release-build  # Build (release)
+make test           # Run all tests
+make lint           # Run clippy + rustfmt
+make install        # Install locally
 ```
-
-### Releasing
-
-Harrier uses an interactive release wizard to simplify the release process:
-
-```bash
-# Run the release wizard
-make release
-```
-
-The wizard will:
-1. Detect the current version
-2. Prompt for release type (major/minor/patch/custom)
-3. Show commits since last release
-4. Run pre-release checks (tests, git status, etc.)
-5. Update version in `Cargo.toml`
-6. Create a git commit and tag
-7. Show push instructions
-
-After the wizard completes, push to trigger the release:
-
-```bash
-git push origin main
-git push origin v1.0.0  # Replace with your version
-```
-
-This automatically triggers a GitHub Actions workflow that:
-- Builds binaries for 6 platforms (macOS Intel/ARM, Windows x64/ARM, Linux x64/ARM)
-- Creates a GitHub Release with all binaries attached
-- Generates release notes from commits
-
-### CI/CD
-
-The project uses GitHub Actions for continuous integration and release automation:
-
-**CI Workflow** (`.github/workflows/ci.yml`):
-- **Lint** - Code formatting and clippy checks (ubuntu)
-- **Test (Linux)** - Full test suite on Linux (ubuntu)
-- **Test (macOS)** - Platform-specific tests only (macos)
-- **Test (Windows)** - Platform-specific tests only (windows)
-
-All jobs run in parallel for speed, with automatic cancellation on failure to save costs.
-
-**Release Workflow** (`.github/workflows/release.yml`):
-- Triggered by git tags matching `v*.*.*`
-- Builds release binaries for 6 platforms in parallel
-- Publishes to GitHub Releases with auto-generated notes
 
 ## About HAR Files
 
-HTTP Archive (HAR) is a JSON-based format for logging web browser interactions with web servers. HAR files contain:
-- HTTP request/response headers and bodies
-- Timing information
-- Cookie and cache data
-- SSL/TLS connection details
+HTTP Archive (HAR) is a JSON format for logging HTTP transactions. HAR files contain requests, responses, headers, cookies, and timing data.
 
 Learn more: [HAR Specification](https://w3c.github.io/web-performance/specs/HAR/Overview.html)
-
-## Sponsor
-
-This project is sponsored by [StackHawk](https://www.stackhawk.com/), purveyors of fine API discovery, test, and intelligence solutions.
 
 ## License
 
 MIT - See [LICENSE](LICENSE) for details.
+
+---
+
+Made with ❤️ by [StackHawk](https://www.stackhawk.com/).

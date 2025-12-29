@@ -67,8 +67,15 @@ impl ProfileManager {
     /// Create a temporary profile that will be deleted on drop
     pub fn temporary() -> Result<Self> {
         let temp_dir = tempfile::tempdir().map_err(Error::Io)?;
-
         let path = temp_dir.keep();
+
+        // Set restrictive permissions on Unix to protect cached credentials/cookies
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))
+                .map_err(Error::Io)?;
+        }
 
         Ok(Self {
             path,
@@ -186,6 +193,23 @@ mod tests {
 
         // Temp profile should be deleted
         assert!(!path.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_temp_profile_has_restrictive_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let profile = ProfileManager::temporary().unwrap();
+        let path = profile.path().to_path_buf();
+
+        let metadata = std::fs::metadata(&path).unwrap();
+        let mode = metadata.permissions().mode() & 0o777;
+
+        // Should be owner-only (0o700)
+        assert_eq!(mode, 0o700, "Temp profile should have 0o700 permissions");
+
+        drop(profile);
     }
 
     #[test]

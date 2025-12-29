@@ -1,5 +1,7 @@
 use http::{Request, Response};
 use hudsucker::{Body, HttpContext, HttpHandler, RequestOrResponse};
+use std::collections::{HashMap, VecDeque};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -8,8 +10,9 @@ use tokio::sync::Mutex;
 pub struct HarCaptureHandler {
     /// Shared buffer for captured entries (will convert to HAR entries later)
     entries: Arc<Mutex<Vec<CapturedEntry>>>,
-    /// Temporary storage for pending requests (URL -> entry index)
-    pending: Arc<Mutex<Vec<PendingRequest>>>,
+    /// Pending requests grouped by client connection (FIFO per connection)
+    /// Key: client socket address, Value: queue of pending requests
+    pending: Arc<Mutex<HashMap<SocketAddr, VecDeque<PendingRequest>>>>,
 }
 
 /// Temporary storage for a request waiting for its response
@@ -37,7 +40,7 @@ impl HarCaptureHandler {
     pub fn new() -> Self {
         Self {
             entries: Arc::new(Mutex::new(Vec::new())),
-            pending: Arc::new(Mutex::new(Vec::new())),
+            pending: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -55,12 +58,13 @@ impl Default for HarCaptureHandler {
 impl HttpHandler for HarCaptureHandler {
     fn handle_request(
         &mut self,
-        _ctx: &HttpContext,
+        ctx: &HttpContext,
         req: Request<Body>,
     ) -> impl std::future::Future<Output = RequestOrResponse> + Send {
         let method = req.method().to_string();
         let url = req.uri().to_string();
         let started_at = std::time::SystemTime::now();
+        let client_addr = ctx.client_addr;
 
         // Capture request headers
         let request_headers: Vec<(String, String)> = req
@@ -69,9 +73,14 @@ impl HttpHandler for HarCaptureHandler {
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
             .collect();
 
-        tracing::debug!("Intercepted request: {} {}", method, url);
+        tracing::debug!(
+            "Intercepted request: {} {} (client: {})",
+            method,
+            url,
+            client_addr
+        );
 
-        // Store pending request
+        // Store pending request grouped by client connection
         let pending = self.pending.clone();
         let pending_req = PendingRequest {
             url: url.clone(),
@@ -82,7 +91,11 @@ impl HttpHandler for HarCaptureHandler {
 
         async move {
             let mut pending_guard = pending.lock().await;
-            pending_guard.push(pending_req);
+            // Add to the queue for this client connection (FIFO order)
+            pending_guard
+                .entry(client_addr)
+                .or_insert_with(VecDeque::new)
+                .push_back(pending_req);
             drop(pending_guard);
 
             RequestOrResponse::Request(req)
@@ -91,10 +104,11 @@ impl HttpHandler for HarCaptureHandler {
 
     fn handle_response(
         &mut self,
-        _ctx: &HttpContext,
+        ctx: &HttpContext,
         res: Response<Body>,
     ) -> impl std::future::Future<Output = Response<Body>> + Send {
         let status = res.status().as_u16();
+        let client_addr = ctx.client_addr;
 
         // Capture response headers
         let response_headers: Vec<(String, String)> = res
@@ -103,16 +117,18 @@ impl HttpHandler for HarCaptureHandler {
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
             .collect();
 
-        tracing::debug!("Intercepted response: {}", status);
+        tracing::debug!("Intercepted response: {} (client: {})", status, client_addr);
 
-        // Match response with the most recent pending request
-        // This is a simple FIFO approach for MVP - proper implementation would use request ID
+        // Match response with the oldest pending request for this client (FIFO)
         let pending = self.pending.clone();
         let entries = self.entries.clone();
 
         async move {
             let mut pending_guard = pending.lock().await;
-            if let Some(req) = pending_guard.pop() {
+            // Get the queue for this client and pop from the front (FIFO order)
+            if let Some(queue) = pending_guard.get_mut(&client_addr)
+                && let Some(req) = queue.pop_front()
+            {
                 let entry = CapturedEntry {
                     method: req.method,
                     url: req.url,
@@ -122,6 +138,11 @@ impl HttpHandler for HarCaptureHandler {
                     started_at: req.started_at,
                     completed_at: std::time::SystemTime::now(),
                 };
+
+                // Clean up empty queues to prevent memory growth
+                if queue.is_empty() {
+                    pending_guard.remove(&client_addr);
+                }
 
                 let mut entries_guard = entries.lock().await;
                 entries_guard.push(entry);

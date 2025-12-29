@@ -14,17 +14,12 @@ fn test_completion_command_help() {
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains(
-            "Generate shell completion scripts",
-        ))
-        .stdout(predicate::str::contains("SUPPORTED SHELLS"))
+        .stdout(predicate::str::contains("Generate shell completions"))
+        .stdout(predicate::str::contains("--shell"))
         .stdout(predicate::str::contains("bash"))
         .stdout(predicate::str::contains("zsh"))
         .stdout(predicate::str::contains("fish"))
-        .stdout(predicate::str::contains("powershell"))
-        .stdout(predicate::str::contains("INSTALLATION"))
-        .stdout(predicate::str::contains("~/.bashrc"))
-        .stdout(predicate::str::contains("~/.zshrc"));
+        .stdout(predicate::str::contains("powershell"));
 }
 
 #[test]

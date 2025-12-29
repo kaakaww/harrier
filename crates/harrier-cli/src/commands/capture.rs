@@ -1,13 +1,19 @@
 use anyhow::Result;
-use harrier_browser::{CdpSession, ChromeFinder, ChromeLauncher, ProfileManager};
 use std::path::{Path, PathBuf};
+
+/// Capture mode - browser (default) or proxy
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CaptureMode {
+    #[default]
+    Browser,
+    Proxy,
+}
 
 /// Kill a process by PID (cross-platform)
 fn kill_process_by_pid(pid: u32) {
     #[cfg(unix)]
     {
         use std::process::Command;
-        // Use kill command to send SIGTERM
         let _ = Command::new("kill").arg(pid.to_string()).output();
     }
 
@@ -20,16 +26,42 @@ fn kill_process_by_pid(pid: u32) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn execute(
+    mode: CaptureMode,
     output: &Path,
     hosts: Vec<String>,
-    scan: bool,
-    chrome_path: Option<PathBuf>,
+    hawkscan: bool,
+    // Browser-specific options
     url: Option<String>,
     profile: Option<String>,
     temp: bool,
+    chrome_path: Option<PathBuf>,
+    // Proxy-specific options
+    port: u16,
+    cert: Option<PathBuf>,
+    key: Option<PathBuf>,
 ) -> Result<()> {
-    // Create tokio runtime for async operations
+    match mode {
+        CaptureMode::Browser => {
+            execute_browser(output, hosts, hawkscan, url, profile, temp, chrome_path)
+        }
+        CaptureMode::Proxy => execute_proxy(port, output, cert.as_deref(), key.as_deref()),
+    }
+}
+
+/// Execute browser-based capture (Chrome with DevTools Protocol)
+fn execute_browser(
+    output: &Path,
+    hosts: Vec<String>,
+    hawkscan: bool,
+    url: Option<String>,
+    profile: Option<String>,
+    temp: bool,
+    chrome_path: Option<PathBuf>,
+) -> Result<()> {
+    use harrier_browser::{CdpSession, ChromeFinder, ChromeLauncher, ProfileManager};
+
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
@@ -43,14 +75,12 @@ pub fn execute(
 
         // Step 2: Setup profile
         let profile_manager = if temp {
-            // Temporary profile takes precedence
             if profile.is_some() {
                 eprintln!("⚠️  Both --profile and --temp specified. Using temporary profile.");
             }
             println!("📁 Using temporary profile");
             ProfileManager::temporary()?
         } else if let Some(profile_name) = profile {
-            // Named persistent profile
             let profile_path = dirs::home_dir()
                 .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?
                 .join(".harrier")
@@ -60,12 +90,11 @@ pub fn execute(
             println!("📁 Using profile: {}", profile_name);
             ProfileManager::persistent(profile_path)?
         } else {
-            // Default persistent profile
             println!("📁 Using profile: default");
             ProfileManager::default_profile()?
         };
 
-        // Step 3: Create launcher (always launches to about:blank)
+        // Step 3: Create launcher
         let launcher = ChromeLauncher::new(
             chrome_binary,
             profile_manager.path().to_path_buf(),
@@ -97,6 +126,8 @@ pub fn execute(
             println!("🌐 Navigating to {}...", start_url);
             cdp_session.navigate_to(start_url).await?;
             println!("✅ Navigation complete");
+        } else {
+            println!("💡 Tip: Use --url <target> to ensure accurate primary host detection");
         }
 
         println!("📊 Capturing network traffic...");
@@ -109,23 +140,19 @@ pub fn execute(
         println!("Press a key when ready, or close Chrome naturally...");
 
         // Step 6: Start capture
-        // Start CDP capture (returns shutdown channel and result receiver)
         let (shutdown_tx, capture_rx) = cdp_session.capture_traffic().await?;
 
         // Step 7: Wait for Chrome to exit or user input
         use console::Term;
 
-        // Spawn user input task (non-blocking read)
         let input_task = tokio::task::spawn_blocking(move || {
             let term = Term::stdout();
             term.read_char()
         });
 
-        // Spawn Chrome wait task (wrap in Option for conditional consumption)
         let wait_task = tokio::task::spawn_blocking(move || chrome_process.wait());
         let mut wait_task = Some(wait_task);
 
-        // Wait for either Chrome to exit or user to press a key
         enum Action {
             ChromeExited,
             StopCapture,
@@ -134,16 +161,14 @@ pub fn execute(
         }
 
         let action = tokio::select! {
-            // Chrome exits naturally
             result = wait_task.as_mut().unwrap() => {
                 let status = result??;
                 let exit_code = status.code().unwrap_or(-1);
                 println!("\n🛑 Chrome closed (exit code: {})", exit_code);
-                wait_task = None; // Task consumed
+                wait_task = None;
                 Action::ChromeExited
             }
 
-            // User presses a key
             result = input_task => {
                 let key = result??;
                 match key.to_lowercase().next().unwrap_or(' ') {
@@ -160,7 +185,6 @@ pub fn execute(
                         Action::AbortAll
                     }
                     _ => {
-                        // Invalid key - wait for Chrome to exit naturally
                         println!("\n⚠️  Invalid key '{}'. Waiting for Chrome to close naturally...", key);
                         let status = wait_task.take().unwrap().await??;
                         let exit_code = status.code().unwrap_or(-1);
@@ -174,15 +198,12 @@ pub fn execute(
         // Handle the action
         let network_capture = match action {
             Action::StopCapture => {
-                // Signal CDP to stop capturing and get results
                 let _ = shutdown_tx.send(());
                 println!("✅ Capture stopped - Chrome continues running");
                 println!("   Note: Chrome remains open for continued use");
-                // Abort wait_task to stop waiting for Chrome (if still present)
                 if let Some(task) = wait_task.take() {
                     task.abort();
                 }
-                // Get captured traffic with timeout
                 tokio::time::timeout(
                     std::time::Duration::from_secs(5),
                     capture_rx
@@ -192,7 +213,6 @@ pub fn execute(
                 .map_err(|e| anyhow::anyhow!("Failed to receive capture data: {}", e))?
             }
             Action::KillChrome => {
-                // Signal CDP to stop and get captured traffic BEFORE killing Chrome
                 let _ = shutdown_tx.send(());
                 let capture = tokio::time::timeout(
                     std::time::Duration::from_secs(5),
@@ -202,7 +222,6 @@ pub fn execute(
                 .map_err(|_| anyhow::anyhow!("Timeout waiting for capture data"))?
                 .map_err(|e| anyhow::anyhow!("Failed to receive capture data: {}", e))?;
 
-                // Now kill Chrome and wait for exit
                 kill_process_by_pid(chrome_pid);
                 println!("⏳ Waiting for Chrome to terminate...");
                 if let Some(task) = wait_task.take() {
@@ -213,17 +232,15 @@ pub fn execute(
                 capture
             }
             Action::AbortAll => {
-                // Kill Chrome and exit immediately without saving HAR
                 kill_process_by_pid(chrome_pid);
                 println!("🛑 Killing Chrome...");
                 if let Some(task) = wait_task.take() {
-                    let _ = task.await; // Wait for termination but ignore result
+                    let _ = task.await;
                 }
                 println!("❌ Aborted - no HAR saved");
                 return Ok(());
             }
             Action::ChromeExited => {
-                // Chrome exited naturally, signal CDP to stop and get captured traffic
                 let _ = shutdown_tx.send(());
                 tokio::time::timeout(
                     std::time::Duration::from_secs(5),
@@ -235,40 +252,173 @@ pub fn execute(
             }
         };
 
-        // Step 7: Process captured traffic
-
+        // Step 8: Process captured traffic
         let request_count = network_capture.count();
         println!("📊 Captured {} HTTP requests", request_count);
 
-        // Step 8: Convert to HAR
-        let mut har = network_capture.to_har();
+        // Step 9: Convert to HAR with metadata
+        let mut har = network_capture.to_har_with_metadata(
+            url.as_deref(),
+            Some("browser"),
+        );
 
-        // Step 9: Apply host filters if specified
+        // Step 10: Apply host filters if specified
         if !hosts.is_empty() {
             println!("🔍 Filtering to hosts: {}", hosts.join(", "));
             har = apply_host_filter(har, hosts)?;
             println!("📝 Filtered to {} requests", har.log.entries.len());
         }
 
-        // Step 10: Write HAR file
+        // Step 11: Write HAR file
         let har_json = serde_json::to_string_pretty(&har)?;
         std::fs::write(output, har_json)?;
         println!("✅ HAR file written to: {}", output.display());
 
-        // Step 11: Run hawk scan if requested
-        if scan {
-            println!("🦅 Running StackHawk scan...");
-            run_hawk_scan(output)?;
-            println!("✅ Scan complete");
+        // Remind about --url if not specified
+        if url.is_none() {
+            println!("💡 Next time, use --url <target> for accurate primary host detection");
+        }
+
+        // Step 12: Print HawkScan guidance if requested
+        if hawkscan {
+            print_hawkscan_guidance(output);
         }
 
         Ok(())
     });
 
-    // Explicitly shutdown runtime with timeout to prevent hanging on blocking tasks
     runtime.shutdown_timeout(std::time::Duration::from_millis(100));
 
     result
+}
+
+/// Execute proxy-based capture (MITM proxy)
+fn execute_proxy(
+    port: u16,
+    output: &Path,
+    cert_path: Option<&Path>,
+    key_path: Option<&Path>,
+) -> Result<()> {
+    use harrier_proxy::{CertificateAuthority, ProxyServer};
+
+    tracing::info!("Starting Harrier MITM proxy on port {}", port);
+
+    // Load or generate CA certificate
+    let ca = if let (Some(cert), Some(key)) = (cert_path, key_path) {
+        tracing::info!("Loading CA certificate from custom paths");
+        CertificateAuthority::load_from_pem(cert, key)?
+    } else {
+        tracing::info!("Using default CA certificate location");
+        CertificateAuthority::load_or_generate()?
+    };
+
+    println!("🌐 Starting proxy on port {}...", port);
+    println!("📝 Output will be written to: {}", output.display());
+    println!();
+    println!(
+        "Configure your browser/app to use proxy: http://localhost:{}",
+        port
+    );
+    println!("Press Ctrl+C to stop capturing and save HAR file");
+    println!();
+
+    // Create and start proxy server
+    let server = ProxyServer::new(port, ca);
+
+    let runtime = tokio::runtime::Runtime::new()?;
+    let handler = runtime.block_on(async { server.start().await })?;
+
+    println!();
+    println!("🛑 Proxy stopped");
+
+    // Get captured entries
+    let entries = runtime.block_on(async { handler.entries().lock().await.clone() });
+
+    println!("📊 Captured {} HTTP transactions", entries.len());
+
+    // Generate HAR file
+    if !entries.is_empty() {
+        use serde_json::json;
+        use std::fs;
+
+        let har_entries: Vec<serde_json::Value> = entries
+            .iter()
+            .map(|entry| {
+                let duration = entry
+                    .completed_at
+                    .duration_since(entry.started_at)
+                    .unwrap_or_default();
+
+                json!({
+                    "startedDateTime": format!("{:?}", entry.started_at),
+                    "time": duration.as_millis() as i64,
+                    "request": {
+                        "method": entry.method,
+                        "url": entry.url,
+                        "httpVersion": "HTTP/1.1",
+                        "headers": entry.request_headers.iter().map(|(k, v)| {
+                            json!({
+                                "name": k,
+                                "value": v
+                            })
+                        }).collect::<Vec<_>>(),
+                        "queryString": [],
+                        "cookies": [],
+                        "headersSize": -1,
+                        "bodySize": -1
+                    },
+                    "response": {
+                        "status": entry.response_status,
+                        "statusText": "OK",
+                        "httpVersion": "HTTP/1.1",
+                        "headers": entry.response_headers.iter().map(|(k, v)| {
+                            json!({
+                                "name": k,
+                                "value": v
+                            })
+                        }).collect::<Vec<_>>(),
+                        "cookies": [],
+                        "content": {
+                            "size": -1,
+                            "mimeType": "application/octet-stream"
+                        },
+                        "redirectURL": "",
+                        "headersSize": -1,
+                        "bodySize": -1
+                    },
+                    "cache": {},
+                    "timings": {
+                        "send": 0,
+                        "wait": duration.as_millis() as i64,
+                        "receive": 0
+                    }
+                })
+            })
+            .collect();
+
+        let har = json!({
+            "log": {
+                "version": "1.2",
+                "creator": {
+                    "name": "Harrier",
+                    "version": env!("CARGO_PKG_VERSION")
+                },
+                "entries": har_entries,
+                "_harrier": {
+                    "capture_mode": "proxy"
+                }
+            }
+        });
+
+        let har_json = serde_json::to_string_pretty(&har)?;
+        fs::write(output, har_json)?;
+
+        println!("✅ HAR file written to: {}", output.display());
+    } else {
+        println!("⚠️  No traffic captured, HAR file not generated");
+    }
+
+    Ok(())
 }
 
 /// Apply host filtering to HAR file
@@ -284,34 +434,17 @@ fn apply_host_filter(
         .map_err(|e| anyhow::anyhow!("Filter failed: {}", e))
 }
 
-/// Run StackHawk scan with HAR file
-fn run_hawk_scan(har_path: &Path) -> Result<()> {
-    use std::process::Command;
-
-    // Check if hawk binary exists
-    if which::which("hawk").is_err() {
-        return Err(anyhow::anyhow!(
-            "hawk command not found. Install StackHawk CLI or omit --scan flag."
-        ));
-    }
-
-    // Check for stackhawk.yml
-    if !std::path::Path::new("stackhawk.yml").exists() {
-        println!("⚠️  No stackhawk.yml found, running scan with defaults");
-    }
-
-    // Run hawk scan
-    let output = Command::new("hawk").arg("scan").arg(har_path).output()?;
-
-    if !output.status.success() {
-        return Err(anyhow::anyhow!(
-            "hawk scan failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    // Print hawk output
-    println!("{}", String::from_utf8_lossy(&output.stdout));
-
-    Ok(())
+/// Print HawkScan configuration guidance
+fn print_hawkscan_guidance(har_path: &Path) {
+    println!();
+    println!("📋 To use this HAR with HawkScan, add the following to your stackhawk.yml:");
+    println!();
+    println!("hawk:");
+    println!("  spider:");
+    println!("    har:");
+    println!("      file:");
+    println!("        paths:");
+    println!("          - {}", har_path.display());
+    println!();
+    println!("Then run: hawk scan");
 }

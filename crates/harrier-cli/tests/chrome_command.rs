@@ -8,23 +8,21 @@ fn get_harrier_bin() -> PathBuf {
 }
 
 #[test]
-fn test_chrome_command_help() {
+fn test_capture_command_help() {
     let mut cmd = Command::new(get_harrier_bin());
-    cmd.arg("chrome").arg("--help");
+    cmd.arg("capture").arg("--help");
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains(
-            "Launch Chrome and capture HAR traffic",
-        ))
+        .stdout(predicate::str::contains("Capture HTTP traffic"))
         .stdout(predicate::str::contains("--output"))
-        .stdout(predicate::str::contains("--hosts"))
-        .stdout(predicate::str::contains("--scan"))
+        .stdout(predicate::str::contains("--host"))
+        .stdout(predicate::str::contains("--hawkscan"))
         .stdout(predicate::str::contains("--profile"));
 }
 
 #[test]
-fn test_chrome_command_without_chrome() {
+fn test_capture_command_without_chrome() {
     // This test will fail if Chrome is actually installed
     // Skip if Chrome exists at default paths
     let chrome_paths = [
@@ -42,7 +40,7 @@ fn test_chrome_command_without_chrome() {
     }
 
     let mut cmd = Command::new(get_harrier_bin());
-    cmd.arg("chrome")
+    cmd.arg("capture")
         .arg("--chrome-path")
         .arg("/nonexistent/chrome");
 
@@ -52,9 +50,9 @@ fn test_chrome_command_without_chrome() {
 }
 
 #[test]
-fn test_chrome_command_output_flag() {
+fn test_capture_command_output_flag() {
     let mut cmd = Command::new(get_harrier_bin());
-    cmd.arg("chrome")
+    cmd.arg("capture")
         .arg("--output")
         .arg("custom-output.har")
         .arg("--chrome-path")
@@ -65,9 +63,9 @@ fn test_chrome_command_output_flag() {
 }
 
 #[test]
-fn test_chrome_command_temp_flag_in_help() {
+fn test_capture_command_temp_flag_in_help() {
     let mut cmd = Command::new(get_harrier_bin());
-    cmd.arg("chrome").arg("--help");
+    cmd.arg("capture").arg("--help");
 
     cmd.assert()
         .success()
@@ -76,10 +74,10 @@ fn test_chrome_command_temp_flag_in_help() {
 }
 
 #[test]
-fn test_chrome_command_profile_flags_parse() {
+fn test_capture_command_profile_flags_parse() {
     // Test that --profile flag is accepted
     let mut cmd = Command::new(get_harrier_bin());
-    cmd.arg("chrome")
+    cmd.arg("capture")
         .arg("--profile")
         .arg("test-profile")
         .arg("--chrome-path")
@@ -90,7 +88,7 @@ fn test_chrome_command_profile_flags_parse() {
 
     // Test that --temp flag is accepted
     let mut cmd = Command::new(get_harrier_bin());
-    cmd.arg("chrome")
+    cmd.arg("capture")
         .arg("--temp")
         .arg("--chrome-path")
         .arg("/nonexistent/chrome");
@@ -99,11 +97,11 @@ fn test_chrome_command_profile_flags_parse() {
 }
 
 #[test]
-fn test_chrome_temp_precedence_warning() {
+fn test_capture_temp_precedence_warning() {
     // When both --profile and --temp are specified, should show warning
     // This test verifies the flags can be parsed together
     let mut cmd = Command::new(get_harrier_bin());
-    cmd.arg("chrome")
+    cmd.arg("capture")
         .arg("--profile")
         .arg("my-profile")
         .arg("--temp")

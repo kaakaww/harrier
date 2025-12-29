@@ -36,6 +36,7 @@ impl ChromeLauncher {
     fn build_args(&self) -> Vec<String> {
         vec![
             format!("--remote-debugging-port={}", self.debugging_port),
+            "--remote-debugging-address=127.0.0.1".to_string(),
             "--no-first-run".to_string(),
             "--no-default-browser-check".to_string(),
             format!("--user-data-dir={}", self.profile_path.display()),

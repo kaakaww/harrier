@@ -13,6 +13,7 @@ harrier-core = { workspace = true }
 
 # Async
 tokio = { workspace = true }
+tokio-util = "0.7"
 futures = { workspace = true }
 
 # Browser automation
@@ -24,6 +25,7 @@ serde_json = { workspace = true }
 # Utilities
 chrono = { workspace = true }
 dirs = { workspace = true }
+url = { workspace = true }
 
 # Error handling
 thiserror = { workspace = true }

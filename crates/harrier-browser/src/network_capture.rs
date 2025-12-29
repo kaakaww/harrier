@@ -3,7 +3,8 @@ use std::time::{Duration, SystemTime};
 
 use chrono::{DateTime, Utc};
 use harrier_core::har::{
-    Cache, Content, Creator, Entry, Har, Header, Log, PostData, Request, Response, Timings,
+    Cache, Content, Creator, Entry, Har, HarrierMetadata, Header, Log, PostData, Request, Response,
+    Timings,
 };
 
 /// Represents a captured network request with optional response
@@ -149,11 +150,45 @@ impl NetworkCapture {
 
     /// Convert captured network events to HAR format
     pub fn to_har(&self) -> Har {
+        self.to_har_with_metadata(None, None)
+    }
+
+    /// Convert captured network events to HAR format with optional metadata
+    pub fn to_har_with_metadata(
+        &self,
+        target_url: Option<&str>,
+        capture_mode: Option<&str>,
+    ) -> Har {
         let entries: Vec<Entry> = self
             .requests
             .values()
             .map(|net_req| self.network_request_to_entry(net_req))
             .collect();
+
+        // Extract target host from target URL if provided
+        // Handle URLs with or without scheme (e.g., "app.example.com" or "https://app.example.com")
+        let target_host = target_url.and_then(|url_str| {
+            // Try parsing as a full URL first
+            if let Ok(parsed) = url::Url::parse(url_str) {
+                return parsed.host_str().map(|h| h.to_string());
+            }
+            // If that fails, try adding https:// and parsing
+            if let Ok(parsed) = url::Url::parse(&format!("https://{}", url_str)) {
+                return parsed.host_str().map(|h| h.to_string());
+            }
+            // Last resort: use input as hostname (strip any path component)
+            Some(url_str.split('/').next().unwrap_or(url_str).to_string())
+        });
+
+        let harrier_metadata = if target_url.is_some() || capture_mode.is_some() {
+            Some(HarrierMetadata {
+                target_url: target_url.map(|s| s.to_string()),
+                target_host,
+                capture_mode: capture_mode.map(|s| s.to_string()),
+            })
+        } else {
+            None
+        };
 
         Har {
             log: Log {
@@ -167,6 +202,7 @@ impl NetworkCapture {
                 pages: None,
                 entries,
                 comment: None,
+                harrier_metadata,
             },
         }
     }

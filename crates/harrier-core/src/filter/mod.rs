@@ -210,6 +210,7 @@ pub fn filter_har(har: &Har, criteria: &FilterCriteria) -> crate::Result<Har> {
             pages: har.log.pages.clone(),
             entries: filtered_entries,
             comment: har.log.comment.clone(),
+            harrier_metadata: har.log.harrier_metadata.clone(),
         },
     })
 }

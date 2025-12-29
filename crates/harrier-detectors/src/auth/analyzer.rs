@@ -116,6 +116,7 @@ mod tests {
                 pages: None,
                 entries: vec![],
                 comment: None,
+                harrier_metadata: None,
             },
         }
     }
