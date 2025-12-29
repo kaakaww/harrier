@@ -35,7 +35,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Analyze HAR for security, auth, APIs, and architecture
+    /// Analyze HAR for authentication and architecture
     Analyze {
         /// HAR file to analyze
         #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]

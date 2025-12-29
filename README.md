@@ -61,7 +61,6 @@ harrier analyze app.har
 # Focus on specific areas
 harrier analyze app.har --focus map       # Architecture/hosts
 harrier analyze app.har --focus auth      # Authentication patterns
-harrier analyze app.har --focus security  # Security findings
 
 # Multiple focus areas
 harrier analyze app.har --focus map --focus auth
@@ -75,6 +74,38 @@ harrier analyze app.har --host api.example.com
 # Output formats
 harrier analyze app.har --format json
 harrier analyze app.har --format table
+```
+
+#### Authentication Analysis (`--focus auth`)
+
+Deep analysis of authentication and authorization:
+
+```bash
+harrier analyze app.har --focus auth
+```
+
+Detects:
+- **Auth Providers**: Microsoft Entra, Auth0, Okta, Google, AWS Cognito, Firebase, Keycloak
+- **OAuth Flows**: Authorization code, token exchange, refresh patterns
+- **Credentials**: Traces cookies and headers back to their origin endpoints
+- **JWT Details**: Algorithm, issuer, audience, claims (email, roles, scope)
+- **Security Issues**: Missing cookie attributes (HttpOnly, Secure, SameSite)
+
+Example output:
+```
+Authentication
+  Provider:     Microsoft Entra
+                login.microsoftonline.com (3rd party)
+  Method:       OAuth 2.0 Authorization Code
+
+Authorization
+  Session Cookies:
+    auth-token           HttpOnly, Secure
+      ⚠ Missing SameSite attribute
+
+  Credential Sources:
+    Cookie auth-token [JWT]  (45 requests)
+      ← POST 200 (Set-Cookie header)  https://api.example.com/login
 ```
 
 ### `harrier capture` - Capture Traffic

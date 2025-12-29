@@ -13,6 +13,7 @@ harrier-core = { workspace = true }
 
 # Async
 tokio = { workspace = true }
+tokio-util = "0.7"
 futures = { workspace = true }
 
 # Browser automation

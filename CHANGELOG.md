@@ -8,8 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Enhanced Auth Analysis** (`--focus auth`):
+  - Third-party provider detection (Microsoft Entra, Auth0, Okta, Google, AWS Cognito, Firebase, Keycloak, OneLogin, Ping Identity, Salesforce)
+  - OAuth flow detection from URL patterns and JWT claims
+  - Credential tracing: tracks cookies and auth headers back to their origin endpoints
+  - JWT details: algorithm, issuer, audience, expiration, and all claims
+  - Session cookie security analysis with warnings for missing HttpOnly/Secure/SameSite
 - **CLI Redesign**: Consolidated 8 commands into 6 workflow-oriented commands
-  - New `analyze` command with `--focus` flags (stats, security, auth, map, api) and `--all`
+  - New `analyze` command with `--focus` flags (map, auth) and `--all`
   - New `capture` command combining browser (default) and proxy (`--proxy`) modes
   - New `export` command for generating configs (`--hawkscan`)
 - **Target URL Metadata**: `--url` value stored in HAR as `_harrier` metadata
@@ -33,7 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   |-------------|-------------|
   | `harrier stats <FILE>` | `harrier analyze <FILE>` or `--focus stats` |
   | `harrier discover <FILE>` | `harrier analyze <FILE> --focus api` |
-  | `harrier security <FILE>` | `harrier analyze <FILE> --focus security` |
   | `harrier auth <FILE>` | `harrier analyze <FILE> --focus auth` |
   | `harrier map <FILE>` | `harrier analyze <FILE> --focus map` |
   | `harrier chrome` | `harrier capture` |

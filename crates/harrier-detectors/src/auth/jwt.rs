@@ -347,24 +347,23 @@ impl JwtAnalyzer {
 
         for field in &fields {
             if let Some(start) = json_text.find(&format!("\"{}\"", field))
-                && let Some(colon) = json_text[start..].find(':')
+                && let Some(after_field) = json_text.get(start..)
+                && let Some(colon) = after_field.find(':')
+                && let Some(after_colon) = after_field.get(colon + 1..)
+                && let Some(quote_start) = after_colon.find('"')
+                && let Some(after_quote) = after_colon.get(quote_start + 1..)
+                && let Some(quote_end) = after_quote.find('"')
+                && let Some(token) = after_quote.get(..quote_end)
+                && Self::is_jwt(token)
             {
-                let after_colon = &json_text[start + colon + 1..];
-                if let Some(quote_start) = after_colon.find('"')
-                    && let Some(quote_end) = after_colon[quote_start + 1..].find('"')
-                {
-                    let token = &after_colon[quote_start + 1..quote_start + 1 + quote_end];
-                    if Self::is_jwt(token) {
-                        Self::process_jwt_token(
-                            token,
-                            entry_idx,
-                            timestamp,
-                            false,
-                            tokens_map,
-                            security_issues,
-                        );
-                    }
-                }
+                Self::process_jwt_token(
+                    token,
+                    entry_idx,
+                    timestamp,
+                    false,
+                    tokens_map,
+                    security_issues,
+                );
             }
         }
     }

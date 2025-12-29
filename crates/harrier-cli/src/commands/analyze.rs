@@ -374,6 +374,19 @@ fn is_auth_header_name(name: &str) -> bool {
         || lower.starts_with("x-token")
 }
 
+/// Safely truncate a string to max_len characters (not bytes), adding "..." if truncated.
+/// Handles UTF-8 multi-byte characters correctly without panicking.
+fn truncate_with_ellipsis(s: &str, max_len: usize) -> String {
+    if s.chars().count() <= max_len {
+        s.to_string()
+    } else {
+        // Reserve 3 chars for "..."
+        let truncate_at = max_len.saturating_sub(3);
+        let truncated: String = s.chars().take(truncate_at).collect();
+        format!("{}...", truncated)
+    }
+}
+
 /// Check if a value looks like a JWT
 fn looks_like_jwt(value: &str) -> bool {
     let parts: Vec<&str> = value.split('.').collect();
@@ -487,11 +500,8 @@ fn trace_credentials(har: &Har) -> Vec<TracedCredential> {
         };
 
         // Search response bodies for the token value (first 50 chars to avoid false matches)
-        let search_prefix = if search_value.len() > 50 {
-            &search_value[..50]
-        } else {
-            search_value
-        };
+        // Use safe slice to handle UTF-8 boundaries
+        let search_prefix = search_value.get(..50).unwrap_or(search_value);
 
         for entry in &har.log.entries {
             // Check response body for token
@@ -983,11 +993,15 @@ fn analyze_auth_enhanced(
             oauth_flow_detected = true;
             // Extract provider from URL like /oauth2/authorization/google
             if let Some(idx) = url_lower.find("/oauth2/authorization/") {
-                let after = &entry.request.url[idx + 22..];
-                if let Some(end) = after.find(['?', '/', '#']) {
-                    oauth_provider_url = Some(after[..end].to_string());
-                } else {
-                    oauth_provider_url = Some(after.to_string());
+                // Safe slice: use .get() to avoid panic on bounds/UTF-8 issues
+                if let Some(after) = entry.request.url.get(idx + 22..) {
+                    if let Some(end) = after.find(['?', '/', '#']) {
+                        if let Some(provider) = after.get(..end) {
+                            oauth_provider_url = Some(provider.to_string());
+                        }
+                    } else {
+                        oauth_provider_url = Some(after.to_string());
+                    }
                 }
             }
         }
@@ -1192,10 +1206,9 @@ fn analyze_auth_enhanced(
 
         // Check for security issues related to this token
         for issue in &auth_analysis.jwt_issues {
-            if issue
-                .token_preview
-                .starts_with(&jwt.raw_token[..jwt.raw_token.len().min(20)])
-            {
+            // Safe slice: use .get() to handle bounds and UTF-8 correctly
+            let token_prefix = jwt.raw_token.get(..20).unwrap_or(&jwt.raw_token);
+            if issue.token_preview.starts_with(token_prefix) {
                 warnings.push(issue.message.clone());
             }
         }
@@ -1563,40 +1576,23 @@ fn output_pretty(result: &AnalysisResult, file: &Path, focus: &[Focus], all: boo
                 } else {
                     format!("{}:{}", host.host, host.port)
                 };
-                let host_display = if host_display.len() > 35 {
-                    format!("{}...", &host_display[..32])
-                } else {
-                    host_display
-                };
+                let host_display = truncate_with_ellipsis(&host_display, 35);
 
                 let api_type = host.api_type.as_deref().unwrap_or("-");
-                let api_type = if api_type.len() > type_width {
-                    format!("{}...", &api_type[..type_width - 3])
-                } else {
-                    api_type.to_string()
-                };
+                let api_type = truncate_with_ellipsis(api_type, type_width);
+
                 let auth = host.auth_method.as_deref().unwrap_or("-");
-                let auth = if auth.len() > auth_width {
-                    format!("{}...", &auth[..auth_width - 3])
-                } else {
-                    auth.to_string()
-                };
+                let auth = truncate_with_ellipsis(auth, auth_width);
+
                 let cookies = if host.session_cookies.is_empty() {
                     "-".to_string()
                 } else {
                     let joined = host.session_cookies.join(", ");
-                    if joined.len() > cookie_width {
-                        format!("{}...", &joined[..cookie_width - 3])
-                    } else {
-                        joined
-                    }
+                    truncate_with_ellipsis(&joined, cookie_width)
                 };
+
                 let role = host.role.as_deref().unwrap_or("-");
-                let role_display = if role.len() > role_width {
-                    format!("{}...", &role[..role_width - 3])
-                } else {
-                    role.to_string()
-                };
+                let role_display = truncate_with_ellipsis(role, role_width);
 
                 // Pad category first, then apply color (ANSI codes break format width)
                 let category_padded = format!("{:<cat_width$}", host.category);
@@ -1732,12 +1728,8 @@ fn output_pretty(result: &AnalysisResult, file: &Path, focus: &[Focus], all: boo
                         if !jwt.claims.is_empty() {
                             println!("      Claims:");
                             for (key, value) in &jwt.claims {
-                                // Truncate long values
-                                let display_value = if value.len() > 50 {
-                                    format!("{}...", &value[..47])
-                                } else {
-                                    value.clone()
-                                };
+                                // Truncate long values safely
+                                let display_value = truncate_with_ellipsis(value, 50);
                                 println!("        {:12} {}", format!("{}:", key), display_value);
                             }
                         }
