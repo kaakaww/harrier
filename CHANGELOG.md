@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2025-12-28
+
 ### Changed
 
 Updated Intel Mac builds to use macos-15-intel GitHub Actions runner
