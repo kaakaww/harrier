@@ -274,7 +274,7 @@ harrier proxy -o app-traffic.har
 harrier stats app-traffic.har --verbose
 
 # Filter to specific API
-harrier filter app-traffic.har --hosts "api.example.com" -o api-only.har
+harrier filter app-traffic.har --host api.example.com -o api-only.har
 
 # Check for security issues
 harrier security api-only.har
@@ -438,7 +438,7 @@ harrier proxy -o traffic.har
 jq '.log.entries[].request.url' traffic.har
 
 # Filter and pipe to other HAR tools
-harrier filter traffic.har --hosts "*.api.com" | other-har-tool
+harrier filter traffic.har --host "*.api.com" | other-har-tool
 
 # Combine with watch for live analysis
 harrier proxy -o traffic.har &
@@ -456,7 +456,7 @@ Harrier proxy is designed to work seamlessly with StackHawk's HawkScan:
 harrier proxy -o app-traffic.har
 
 # 2. Filter to your application's API
-harrier filter app-traffic.har --hosts "api.example.com" -o api.har
+harrier filter app-traffic.har --host api.example.com -o api.har
 
 # 3. Use with HawkScan (assuming you have stackhawk.yml configured)
 hawk scan app-traffic.har

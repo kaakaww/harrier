@@ -49,9 +49,9 @@ enum Commands {
         #[arg(long)]
         all: bool,
 
-        /// Scope analysis to specific host
-        #[arg(long, value_hint = ValueHint::Hostname)]
-        host: Option<String>,
+        /// Filter to specific hosts (comma-separated or repeatable)
+        #[arg(long, value_delimiter = ',', value_hint = ValueHint::Hostname)]
+        host: Vec<String>,
     },
 
     /// Capture HTTP traffic via browser (default) or proxy
@@ -64,9 +64,9 @@ enum Commands {
         #[arg(short, long, default_value = "captured.har", value_hint = ValueHint::FilePath, hide_default_value = true)]
         output: PathBuf,
 
-        /// Filter to specific hosts (globs supported, repeatable)
-        #[arg(long, value_hint = ValueHint::Hostname)]
-        hosts: Vec<String>,
+        /// Filter to specific hosts (comma-separated or repeatable)
+        #[arg(long, value_delimiter = ',', value_hint = ValueHint::Hostname)]
+        host: Vec<String>,
 
         /// Show HawkScan guidance after capture
         #[arg(long)]
@@ -111,9 +111,9 @@ enum Commands {
         #[arg(long)]
         hawkscan: bool,
 
-        /// Scope export to specific host
-        #[arg(long, value_hint = ValueHint::Hostname)]
-        host: Option<String>,
+        /// Filter to specific hosts (comma-separated or repeatable)
+        #[arg(long, value_delimiter = ',', value_hint = ValueHint::Hostname)]
+        host: Vec<String>,
 
         /// Include all hosts (even non-scannable ones)
         #[arg(long)]
@@ -130,9 +130,9 @@ enum Commands {
         #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         file: PathBuf,
 
-        /// Host patterns (exact or glob like *.example.com)
-        #[arg(long, value_hint = ValueHint::Hostname)]
-        hosts: Vec<String>,
+        /// Filter to specific hosts (comma-separated or repeatable)
+        #[arg(long, value_delimiter = ',', value_hint = ValueHint::Hostname)]
+        host: Vec<String>,
 
         /// Status codes (2xx, 404, 500-599, etc.)
         #[arg(long, value_hint = ValueHint::Other)]
@@ -216,12 +216,12 @@ fn main() -> Result<()> {
             focus,
             all,
             host,
-        }) => commands::analyze::execute(&file, focus, all, host.as_deref(), cli.format),
+        }) => commands::analyze::execute(&file, focus, all, host, cli.format),
 
         Some(Commands::Capture {
             proxy,
             output,
-            hosts,
+            host,
             hawkscan,
             url,
             profile,
@@ -239,7 +239,7 @@ fn main() -> Result<()> {
             commands::capture::execute(
                 mode,
                 &output,
-                hosts,
+                host,
                 hawkscan,
                 url,
                 profile,
@@ -266,7 +266,7 @@ fn main() -> Result<()> {
             commands::export::execute(
                 &file,
                 commands::export::ExportType::HawkScan,
-                host.as_deref(),
+                host,
                 all_hosts,
                 output,
                 cli.format,
@@ -275,14 +275,14 @@ fn main() -> Result<()> {
 
         Some(Commands::Filter {
             file,
-            hosts,
+            host,
             status,
             method,
             content_type,
             output,
         }) => commands::filter::execute(
             &file,
-            hosts,
+            host,
             status,
             method,
             content_type,

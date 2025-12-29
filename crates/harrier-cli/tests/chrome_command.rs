@@ -16,7 +16,7 @@ fn test_capture_command_help() {
         .success()
         .stdout(predicate::str::contains("Capture HTTP traffic"))
         .stdout(predicate::str::contains("--output"))
-        .stdout(predicate::str::contains("--hosts"))
+        .stdout(predicate::str::contains("--host"))
         .stdout(predicate::str::contains("--hawkscan"))
         .stdout(predicate::str::contains("--profile"));
 }

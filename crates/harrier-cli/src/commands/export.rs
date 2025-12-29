@@ -267,7 +267,7 @@ fn is_web_traffic(protocol: &str, domain: &str) -> bool {
 fn build_host_configs(
     har: &Har,
     har_file: &Path,
-    host_filter: Option<&str>,
+    host_filter: &[String],
     all_hosts: bool,
 ) -> Vec<HostConfig> {
     let mut host_entries: HashMap<String, (String, String, u16, Vec<&Entry>)> = HashMap::new();
@@ -341,7 +341,7 @@ fn build_host_configs(
 
     for (key, (protocol, domain, port, entries)) in &host_entries {
         // Apply host filter if specified
-        if host_filter.is_some_and(|filter| !domain.contains(filter)) {
+        if !host_filter.is_empty() && !host_filter.iter().any(|f| domain.contains(f)) {
             continue;
         }
 
@@ -406,7 +406,7 @@ fn build_host_configs(
 pub fn execute(
     file: &Path,
     export_type: ExportType,
-    host_filter: Option<&str>,
+    host_filter: Vec<String>,
     all_hosts: bool,
     output_file: Option<std::path::PathBuf>,
     format: OutputFormat,
@@ -418,13 +418,13 @@ pub fn execute(
 
 fn execute_hawkscan(
     file: &Path,
-    host_filter: Option<&str>,
+    host_filter: Vec<String>,
     all_hosts: bool,
     output_file: Option<std::path::PathBuf>,
     format: OutputFormat,
 ) -> Result<()> {
     let har = HarReader::from_file(file)?;
-    let configs = build_host_configs(&har, file, host_filter, all_hosts);
+    let configs = build_host_configs(&har, file, &host_filter, all_hosts);
 
     if configs.is_empty() {
         println!("No scannable hosts found in HAR file.");

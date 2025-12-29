@@ -483,7 +483,7 @@ pub fn execute(
     file: &Path,
     focus: Vec<Focus>,
     all: bool,
-    host_filter: Option<&str>,
+    host_filter: Vec<String>,
     format: OutputFormat,
 ) -> Result<()> {
     let har = HarReader::from_file(file)?;
@@ -506,8 +506,9 @@ pub fn execute(
         let mut arch = analyze_hosts(&har);
 
         // Apply host filter if specified
-        if let Some(filter) = host_filter {
-            arch.hosts.retain(|h| h.host.contains(filter));
+        if !host_filter.is_empty() {
+            arch.hosts
+                .retain(|h| host_filter.iter().any(|f| h.host.contains(f)));
         }
 
         Some(arch)
