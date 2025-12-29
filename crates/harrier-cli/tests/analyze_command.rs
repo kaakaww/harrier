@@ -54,8 +54,9 @@ fn test_analyze_focus_map() {
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("Architecture"))
-        .stdout(predicate::str::contains("Primary Host"))
-        .stdout(predicate::str::contains("Hosts:"));
+        .stdout(predicate::str::contains("CATEGORY"))
+        .stdout(predicate::str::contains("HOST"))
+        .stdout(predicate::str::contains("Primary"));
 }
 
 #[test]
